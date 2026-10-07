@@ -32,11 +32,13 @@ def main() -> int:
     runner, desc, layout, _ = make_isaac_runner(cfg, args.device, gen)
     validator = BackendValidator(runner.backend, desc, layout, cfg.rates, cfg.gait, cfg.contact)
     results = validator.run()
-    print(format_report(results))
+    print(format_report(results), flush=True)
+    runner.backend.close()
     return 1 if any(r.passed is False for r in results) else 0
 
 
 if __name__ == "__main__":
     code = main()
-    app.close()
-    sys.exit(code)
+    # SimulationApp.close() terminates the process with status 0 (Isaac Sim 5.1), which would hide failures.
+    sys.stdout.flush()
+    os._exit(code)

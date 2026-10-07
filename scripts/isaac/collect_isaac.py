@@ -37,7 +37,8 @@ def main():
     print(layout.summary())
     collect_dataset(runner, desc, cfg.out, cfg.rounds, cfg.steps_per_episode, cfg.warmup_steps, catalog.names, gen,
                     info={"simulator": "isaaclab", "config": args.config})
-    print(f"Wrote dataset to {cfg.out}")
+    print(f"Wrote dataset to {cfg.out}", flush=True)
+    runner.backend.close()
 
 
 if __name__ == "__main__":

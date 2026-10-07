@@ -148,6 +148,12 @@ class SimulationContext:
     def render(self):
         pass
 
+    def has_gui(self):
+        return False
+
+    def set_camera_view(self, eye, target):
+        pass
+
     def get_physics_dt(self):
         return self.cfg.dt
 

@@ -32,8 +32,10 @@ class IsaacSnakeConfig:
     friction_sign: float = 1.0
     use_native_imu: bool = True
     self_collision: bool = False
-    solver_position_iterations: int = 8
-    solver_velocity_iterations: int = 1
+    # Measured on Isaac Sim 5.1 at 1 kHz: with 8/1 iterations resting contacts chatter step to step (normal
+    # force +-70 %, IMU acc +-20 m/s^2); 16/4 brings the normal force within 4 % of the weight for ~5 % cost.
+    solver_position_iterations: int = 16
+    solver_velocity_iterations: int = 4
     spawn_clearance: float = 0.003  # m above resting height
     static_friction_ratio: float = 1.1  # static = ratio * dynamic friction coefficient
 

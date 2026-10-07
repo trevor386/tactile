@@ -57,7 +57,9 @@ def main():
             print(f"t={(t + 1) / cfg.rates.latent_hz:5.2f}s acc={correct[-1]:.2f} predictions={names}")
     lat = torch.tensor(online.latency_ms[5:])
     print(f"mean accuracy over last 50 steps: {sum(correct[-50:]) / 50:.3f}")
-    print(f"latency per step ({args.num_envs} envs): median {lat.median():.2f} ms, p95 {lat.quantile(0.95):.2f} ms")
+    print(f"latency per step ({args.num_envs} envs): median {lat.median():.2f} ms, p95 {lat.quantile(0.95):.2f} ms",
+          flush=True)
+    runner.backend.close()
 
 
 if __name__ == "__main__":

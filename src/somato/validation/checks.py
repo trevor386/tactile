@@ -9,7 +9,7 @@ broken per-environment terrain assignment, and non-finite values. Run them on th
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 
 import torch
 
@@ -44,6 +44,12 @@ class _Constant:
 
     def __call__(self, t):
         return self.targets
+
+
+def _midpoint_gait(cfg: GaitConfig) -> GaitConfig:
+    """``cfg`` with every parameter range collapsed to its midpoint (the same gait in every env)."""
+    ranges = {f.name: getattr(cfg, f.name) for f in fields(cfg) if isinstance(getattr(cfg, f.name), tuple)}
+    return replace(cfg, **{k: ((lo + hi) / 2,) * 2 for k, (lo, hi) in ranges.items()})
 
 
 def _spearman(x: torch.Tensor, y: torch.Tensor) -> float:
@@ -137,11 +143,12 @@ class BackendValidator:
                 relw = float(((reported - weight).abs() / weight).max())
                 self._add("normal_force_equals_weight", relw < 0.1, relw, "< 0.1 relative",
                           "simulator contact reporting at rest")
-        # IMU at rest reads +g along world up, no rotation.
+        # IMU at rest reads +g along world up, no rotation. Averaged over the last latent step: a single sample of
+        # a finite-difference accelerometer still carries rigid-contact solver jitter (~1 m/s^2 in PhysX).
         for name, g in self.layout.groups.items():
             if g.kind != "imu":
                 continue
-            stim = f.stimuli[name][:, -1]  # [E, N, 6]
+            stim = f.stimuli[name].mean(1)  # [E, N, 6]
             _, rot = self.layout.world_poses(bpos, brot, group=name)
             up_local = (rot.transpose(-1, -2) @ torch.tensor([0.0, 0.0, G], device=rot.device, dtype=rot.dtype))
             acc_err = float((stim[..., :3] - up_local).norm(dim=-1).max())
@@ -149,9 +156,20 @@ class BackendValidator:
             self._add(f"imu_gravity[{name}]", acc_err < 0.5, acc_err, "< 0.5 m/s^2")
             self._add(f"imu_still[{name}]", gyro < 0.05, gyro, "< 0.05 rad/s")
 
+    def _alternating_pose(self, amplitude: float = 0.25) -> torch.Tensor:
+        """Joint targets alternating in sign along the chain *within each joint axis*. For a yaw/pitch snake a
+        global alternation would bend every pitch joint the same way and coil the body off the ground."""
+        count: dict[tuple, int] = {}
+        sign: dict[str, float] = {}
+        for name in self.desc.joint_names:
+            axis = tuple(round(abs(a), 3) for a in self.desc.joint(name).axis)
+            sign[name] = (-1.0) ** count.get(axis, 0)
+            count[axis] = count.get(axis, 0) + 1
+        return amplitude * torch.tensor([sign[n] for n in self.backend.joint_names], device=self.backend.device)
+
     def check_joint_tracking(self) -> None:
         nj = len(self.backend.joint_names)
-        pattern = 0.25 * torch.tensor([(-1.0) ** j for j in range(nj)], device=self.backend.device)
+        pattern = self._alternating_pose()
         runner = self._runner(_Constant(pattern.expand(self.backend.num_envs, nj).clone()))
         runner.reset()
         for _ in range(self.settle_steps):
@@ -164,10 +182,13 @@ class BackendValidator:
     def check_gait(self) -> None:
         E = self.backend.num_envs
         gen = torch.Generator().manual_seed(0)
-        gait = SerpenoidGait(self.desc, self.gait_cfg, E, self.backend.device, gen)
+        # The same gait in every env, so friction is the only per-env difference: with randomized gaits,
+        # inertial joint torques (~ A w^2) dominate the friction-dependent part in dynamic simulators.
+        gait = SerpenoidGait(self.desc, _midpoint_gait(self.gait_cfg), E, self.backend.device, gen)
         runner = self._runner(gait)
         n_classes = int(self.backend.terrain.class_id.max().item()) + 1 if E else 1
         runner.reset(terrain_class=torch.arange(E) % max(n_classes, 1))
+        gait.params["phase"].zero_()
         for _ in range(self.settle_steps):
             runner.step_latent()
         torque, shear, dots, frames = [], [], [], []

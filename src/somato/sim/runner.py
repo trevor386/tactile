@@ -3,6 +3,10 @@
 Rates are organized around the *latent step* (the rate at which stage 1 emits latents and stages 2-3
 run). Every sensor group samples ``S_g = rate_g / latent_hz`` times per latent step; all rates must
 divide the physics rate. One call to :meth:`SimRunner.step_latent` returns one latent step of data.
+
+With ``anti_alias`` (default), each sensor sample is the mean of the stimuli over the physics steps of its
+sample period (integrate-and-dump), like a sensor that low-pass filters before sampling. Point sampling
+instead aliases physics-rate solver chatter (e.g. resting-contact jitter in PhysX) into the sensor stream.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ class RateConfig:
     control_hz: float = 100.0
     latent_hz: float = 50.0
     sensors: dict[str, float] = field(default_factory=lambda: {"tactile": 1000.0, "joint": 500.0, "imu": 500.0})
+    anti_alias: bool = True  # average stimuli over each sample period instead of point sampling
 
     def _ratio(self, a: float, b: float, what: str) -> int:
         r = a / b
@@ -86,6 +91,8 @@ class SimRunner:
     def step_latent(self) -> LatentFrame:
         dt = self.backend.physics_dt
         stim: dict[str, list[torch.Tensor]] = {g: [] for g in self.pipeline.layout.group_names}
+        # Running sums over the current sample period (sample periods divide the latent step).
+        period_sum: dict[str, torch.Tensor | int] = {g: 0 for g in stim}
         label_acc: dict[str, torch.Tensor] = {}
         n_label = 0
         state = None
@@ -98,8 +105,15 @@ class SimRunner:
             need = [g for g, every in self._sample_every.items() if self._step_count % every == 0]
             # The stimulus pipeline must run every physics step for IMU finite differences to be correct.
             stimuli, labels = self.pipeline(state, self.backend.terrain, dt)
+            if self.rates.anti_alias:
+                for g in stim:
+                    period_sum[g] = period_sum[g] + stimuli[g]
             for g in need:
-                stim[g].append(stimuli[g])
+                if self.rates.anti_alias:
+                    stim[g].append(period_sum[g] / self._sample_every[g])
+                    period_sum[g] = 0
+                else:
+                    stim[g].append(stimuli[g])
             for k, v in labels.items():
                 label_acc[k] = label_acc.get(k, 0) + v
             n_label += 1

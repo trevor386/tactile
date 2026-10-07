@@ -37,6 +37,8 @@ class IsaacLabBackend(SimBackend):
         )
         self.scene = InteractiveScene(make_scene_cfg(desc, layout, self.cfg))
         self.sim.reset()
+        # Pre-populate asset/sensor buffers (as Isaac Lab's envs do); the IMU needs a dt before its first read.
+        self.scene.update(self.sim.get_physics_dt())
         self.robot = self.scene[ROBOT]
         self._device = torch.device(self.sim.device)
         self._body_names = list(self.robot.body_names)
@@ -45,6 +47,12 @@ class IsaacLabBackend(SimBackend):
         if self.cfg.contact_mode == "net":
             sensor = self.scene["contact_all"]
             self._net_map = torch.tensor([sensor.body_names.index(b) for b in self._body_names], device=self._device)
+        # With a GUI, refresh the viewport every `render_interval` physics steps (as Isaac Lab's envs do).
+        self._render = self.sim.has_gui()
+        self._step_count = 0
+        if self._render:
+            o = self.scene.env_origins[0].tolist()
+            self.sim.set_camera_view([o[0] + 2.0, o[1] + 2.0, o[2] + 1.5], o)
         E = self.num_envs
         self._terrain = catalog.sample(torch.zeros(E, dtype=torch.long), generator, self._device)
         self.reset()
@@ -112,10 +120,20 @@ class IsaacLabBackend(SimBackend):
         self.robot.set_joint_position_target(joint_targets.to(self._device))
         self.scene.write_data_to_sim()
         self.sim.step(render=False)
+        self._step_count += 1
+        if self._render and self._step_count % self.cfg.render_interval == 0:
+            self.sim.render()
         self.scene.update(self.physics_dt)
 
     def render(self) -> None:
         self.sim.render()
+
+    def close(self) -> None:
+        """Release the scene and simulation context (as Isaac Lab's envs do); without this, closing the app
+        can hang in PhysX teardown."""
+        del self.scene
+        self.sim.clear_all_callbacks()
+        self.sim.clear_instance()
 
     # ------------------------------------------------------------------ state
     def get_state(self) -> RawSimState:
