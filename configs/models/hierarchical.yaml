@@ -1,0 +1,25 @@
+# Hierarchical somatosensory encoder (default): conv+GRU temporal encoder per sensor group,
+# continuous-kernel convolution over the sensor graph, cluster-attention terrain head.
+architecture: hierarchical
+dim: 64
+temporal:
+  type: conv_gru            # conv_gru | gru | receptor | mlp
+  latent_dim: 64
+  params: {hidden: 64, conv_channels: 32}
+spatial:
+  type: continuous_conv     # continuous_conv | geo_attention | egnn | full_attention | none
+  num_layers: 2
+  edge_features: rel_pos_local   # none | distance | rel_pos_world | rel_pos_local | rel_pose_local | ppf
+  length_scale: 0.05
+  graph:
+    k: 16
+    k_per_group: {tactile: 12, joint: 3, imu: 1}
+    dynamic: true
+  params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+heads:
+  terrain:
+    type: global
+    pool: cluster_attention
+    hidden: 128
+    cluster_layers: 2
+cluster_mode: body

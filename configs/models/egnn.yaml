@@ -1,0 +1,13 @@
+# Jiang et al. (2025)-style EGNN interaction layer on the same stage 1 (distance-only messages).
+architecture: hierarchical
+dim: 64
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial:
+  type: egnn
+  num_layers: 2
+  edge_features: none
+  length_scale: 0.05
+  graph: {k: 16, k_per_group: {tactile: 12, joint: 3, imu: 1}}
+  params: {hidden: 64}
+heads:
+  terrain: {type: global, pool: meanmax, hidden: 128}

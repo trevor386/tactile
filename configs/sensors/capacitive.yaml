@@ -1,0 +1,3 @@
+tactile: {model: capacitive}
+joint: {model: motor}
+imu: {model: mems_imu}

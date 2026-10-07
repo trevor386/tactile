@@ -1,0 +1,185 @@
+"""A compact, dependency-free training loop."""
+
+from __future__ import annotations
+
+import copy
+import json
+import math
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+
+from somato.training.prepare import BatchPreparer
+from somato.training.tasks import Task
+
+
+@dataclass
+class TrainConfig:
+    epochs: int = 30
+    batch_size: int = 32
+    lr: float = 1e-3
+    weight_decay: float = 1e-4
+    grad_clip: float = 1.0
+    warmup_epochs: float = 1.0
+    output_steps: int = 4  # stages 2-3 (and the loss) run on the last k latent steps of each window
+    device: str = "auto"
+    num_workers: int = 0
+    seed: int = 0
+    patience: int = 0  # early stopping on the selection metric (0 = off)
+    select_metric: str = "terrain/acc_last"
+    normalizer_batches: int = 8
+    log_every: int = 0  # steps between progress prints (0 = once per epoch)
+    max_steps_per_epoch: int = 0  # 0 = full epoch
+
+
+def resolve_device(device: str) -> torch.device:
+    if device == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(device)
+
+
+class Trainer:
+    def __init__(self, model: nn.Module, tasks: list[Task], preparer: BatchPreparer, cfg: TrainConfig,
+                 log_path: str | Path | None = None):
+        self.model, self.tasks, self.preparer, self.cfg = model, tasks, preparer, cfg
+        self.device = preparer.device
+        self.model.to(self.device)
+        self.log_path = Path(log_path) if log_path else None
+        self.history: list[dict[str, Any]] = []
+
+    def _loader(self, ds: Dataset, shuffle: bool) -> DataLoader:
+        gen = torch.Generator().manual_seed(self.cfg.seed)
+        return DataLoader(ds, batch_size=self.cfg.batch_size, shuffle=shuffle, num_workers=self.cfg.num_workers,
+                          drop_last=False, generator=gen, pin_memory=self.device.type == "cuda")
+
+    @torch.no_grad()
+    def fit_normalizers(self, ds: Dataset) -> None:
+        if not hasattr(self.model, "fit_normalizers"):
+            return
+        acc: dict[str, list[torch.Tensor]] = {}
+        for i, sample in enumerate(self._loader(ds, shuffle=True)):
+            if i >= self.cfg.normalizer_batches:
+                break
+            batch = self.preparer(sample, train=False)
+            for g, x in batch.readings.items():
+                acc.setdefault(g, []).append(x.reshape(-1, x.shape[-1]))
+        self.model.fit_normalizers({g: torch.cat(v) for g, v in acc.items()})
+
+    def _loss(self, outputs, batch) -> tuple[torch.Tensor, dict[str, float]]:
+        total, parts = 0.0, {}
+        for t in self.tasks:
+            loss = t.loss(outputs, batch)
+            total = total + t.weight * loss
+            parts[f"{t.name}/loss"] = float(loss.detach())
+        return total, parts
+
+    def fit(self, train_ds: Dataset, val_ds: Dataset | None = None) -> dict[str, Any]:
+        cfg = self.cfg
+        torch.manual_seed(cfg.seed)
+        self.fit_normalizers(train_ds)
+        loader = self._loader(train_ds, shuffle=True)
+        steps_per_epoch = len(loader) if not cfg.max_steps_per_epoch else min(len(loader), cfg.max_steps_per_epoch)
+        total_steps = max(1, cfg.epochs * steps_per_epoch)
+        warmup = max(1, int(cfg.warmup_epochs * steps_per_epoch))
+        opt = torch.optim.AdamW(self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+        sched = torch.optim.lr_scheduler.LambdaLR(
+            opt, lambda s: min(1.0, (s + 1) / warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / total_steps)))
+        )
+        best_score, best_state, best_epoch, bad_epochs = -math.inf, None, -1, 0
+        step = 0
+        for epoch in range(cfg.epochs):
+            self.model.train()
+            t0, running = time.time(), {}
+            for i, sample in enumerate(loader):
+                if cfg.max_steps_per_epoch and i >= cfg.max_steps_per_epoch:
+                    break
+                batch = self.preparer(sample, train=True)
+                outputs, _ = self.model(batch, output_steps=cfg.output_steps)
+                loss, parts = self._loss(outputs, batch)
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                if cfg.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(self.model.parameters(), cfg.grad_clip)
+                opt.step()
+                sched.step()
+                step += 1
+                for k, v in parts.items():
+                    running[k] = running.get(k, 0.0) + v
+                if cfg.log_every and step % cfg.log_every == 0:
+                    print(f"  step {step}: " + ", ".join(f"{k}={v:.4f}" for k, v in parts.items()))
+            n = max(1, min(i + 1, steps_per_epoch))
+            record = {"epoch": epoch, "time": time.time() - t0, "lr": sched.get_last_lr()[0],
+                      **{f"train/{k}": v / n for k, v in running.items()}}
+            if val_ds is not None and len(val_ds) > 0:
+                record.update({f"val/{k}": v for k, v in self.evaluate(val_ds).items()})
+                score = record.get(f"val/{cfg.select_metric}", -record.get("val/loss", 0.0))
+                if score > best_score:
+                    best_score, best_epoch, bad_epochs = score, epoch, 0
+                    best_state = copy.deepcopy(self.model.state_dict())
+                else:
+                    bad_epochs += 1
+            self.history.append(record)
+            self._log(record)
+            if cfg.patience and bad_epochs >= cfg.patience:
+                break
+        if best_state is not None:
+            self.model.load_state_dict(best_state)
+        return {"best_epoch": best_epoch, "best_score": best_score, "history": self.history}
+
+    @torch.no_grad()
+    def evaluate(self, ds: Dataset) -> dict[str, float]:
+        self.model.eval()
+        sums: dict[str, float] = {}
+        count, loss_sum = 0, 0.0
+        for sample in self._loader(ds, shuffle=False):
+            batch = self.preparer(sample, train=False)
+            outputs, _ = self.model(batch, output_steps=self.cfg.output_steps)
+            loss, _ = self._loss(outputs, batch)
+            B = batch.batch_size
+            loss_sum += float(loss) * B
+            count += B
+            for t in self.tasks:
+                for k, v in t.metrics(outputs, batch).items():
+                    sums[f"{t.name}/{k}"] = sums.get(f"{t.name}/{k}", 0.0) + float(v.sum())
+        out = {k: v / max(count, 1) for k, v in sums.items()}
+        out["loss"] = loss_sum / max(count, 1)
+        return out
+
+    @torch.no_grad()
+    def confusion_matrix(self, ds: Dataset, task: Task, num_classes: int) -> torch.Tensor:
+        self.model.eval()
+        cm = torch.zeros(num_classes, num_classes, dtype=torch.long)
+        for sample in self._loader(ds, shuffle=False):
+            batch = self.preparer(sample, train=False)
+            outputs, _ = self.model(batch, output_steps=self.cfg.output_steps)
+            pred = task.predict(outputs).cpu()
+            y = batch.labels[task.label].long().cpu()
+            cm.index_put_((y, pred), torch.ones_like(y), accumulate=True)
+        return cm
+
+    def _log(self, record: dict[str, Any]) -> None:
+        keys = [k for k in record if k.startswith("val/") and ("acc" in k or "mae" in k or k == "val/loss")]
+        msg = f"epoch {record['epoch']:3d} | train loss " + ", ".join(
+            f"{v:.4f}" for k, v in record.items() if k.startswith("train/"))
+        if keys:
+            msg += " | " + ", ".join(f"{k}={record[k]:.4f}" for k in keys)
+        print(msg)
+        if self.log_path:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.log_path, "a") as f:
+                f.write(json.dumps(record) + "\n")
+
+
+def save_checkpoint(path: str | Path, model: nn.Module, extras: dict[str, Any]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"model_state": model.state_dict(), **extras}, path)
+
+
+def train_config_dict(cfg: TrainConfig) -> dict[str, Any]:
+    return asdict(cfg)

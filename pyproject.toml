@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "somato"
+version = "0.1.0"
+description = "Hierarchical somatosensory encoder for dense tactile, IMU, and joint sensing on robots"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+plot = ["matplotlib>=3.7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "isaac: requires Isaac Lab / Isaac Sim (skipped when not installed)",
+    "slow: longer-running integration tests",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"

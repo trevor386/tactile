@@ -1,0 +1,9 @@
+# Unstructured baseline: global attention over all sensors with absolute sensor-id embeddings and
+# no geometric information (tied to one layout; O(N^2) memory).
+architecture: hierarchical
+dim: 64
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial: {type: full_attention, num_layers: 2, edge_features: none, params: {heads: 4}}
+sensor_id_embedding: 512
+heads:
+  terrain: {type: global, pool: attention, hidden: 128}

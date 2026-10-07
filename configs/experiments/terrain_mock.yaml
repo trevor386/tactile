@@ -1,0 +1,22 @@
+# Terrain (ice-form) classification on mock data: python scripts/train.py --config configs/experiments/terrain_mock.yaml
+name: terrain_hierarchical
+dataset: datasets/mock_terrain
+output_dir: runs
+sensors: configs/sensors/fsr.yaml
+model: configs/models/hierarchical.yaml
+tasks:
+  terrain: {type: classification, label: terrain}
+window: 25          # 0.5 s windows at 50 Hz
+stride: 10
+eval_stride: 25
+split: [0.7, 0.15, 0.15]
+train:
+  epochs: 20
+  batch_size: 32
+  lr: 1.0e-3
+  output_steps: 4
+  select_metric: terrain/acc_last
+augment:
+  random_yaw: true
+  random_translation: 1.0
+  sensor_dropout: 0.05

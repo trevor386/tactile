@@ -1,0 +1,6 @@
+# Unstructured baseline: all sensor readings flattened into one vector per latent step -> MLP -> GRU.
+architecture: flat_recurrent
+hidden: 128
+chunk_features: stats
+heads:
+  terrain: {type: global}

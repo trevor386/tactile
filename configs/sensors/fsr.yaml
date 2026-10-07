@@ -1,0 +1,4 @@
+# Sensor technology per group (see somato/sensors). Swap a file to change hardware without re-simulating.
+tactile: {model: fsr, params: {area: 1.0e-4}}
+joint: {model: motor}
+imu: {model: mems_imu}

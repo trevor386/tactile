@@ -1,0 +1,30 @@
+# Isaac Lab data collection: ./isaaclab.sh -p scripts/isaac/collect_isaac.py --config configs/experiments/collect_isaac.yaml --headless
+# (or `python scripts/isaac/...` inside the Isaac Lab python environment)
+robot: configs/robots/snake_3d.yaml
+terrains: configs/terrains/ice_forms.yaml
+out: datasets/isaac_terrain
+seed: 0
+num_envs: 100
+rounds: 6                 # episodes = rounds * num_envs
+steps_per_episode: 150    # latent steps (3 s at 50 Hz)
+warmup_steps: 50          # let the snake settle and the gait ramp up
+rates:
+  physics_hz: 1000
+  control_hz: 100
+  latent_hz: 50
+  sensors: {tactile: 500, joint: 250, imu: 250}
+gait:
+  kind: sidewinding       # PhysX friction is isotropic: lateral undulation barely propels
+  yaw_amplitude: [0.5, 0.9]
+  pitch_amplitude: [0.15, 0.3]
+  frequency: [0.4, 1.0]
+contact:
+  mode: hybrid
+isaac:
+  env_spacing: 4.0
+  contact_mode: per_body  # per_body (normal + friction + contact point) | net (normal only)
+  stiffness: 20.0
+  damping: 0.5
+  effort_limit: 6.0
+  friction_sign: 1.0      # flip to -1.0 if validate_isaac.py reports friction_opposes_sliding FAIL
+  urdf_dir: outputs/urdf

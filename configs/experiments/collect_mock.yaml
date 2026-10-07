@@ -1,0 +1,20 @@
+# Data collection with the CPU mock simulator: python scripts/collect.py --config configs/experiments/collect_mock.yaml
+robot: configs/robots/snake_planar.yaml
+terrains: configs/terrains/ice_forms.yaml
+out: datasets/mock_terrain
+seed: 0
+num_envs: 50
+rounds: 8                  # episodes = rounds * num_envs (class-balanced)
+steps_per_episode: 150     # latent steps (3 s at 50 Hz)
+warmup_steps: 25
+rates:
+  physics_hz: 1000
+  control_hz: 100
+  latent_hz: 50
+  sensors: {tactile: 500, joint: 250, imu: 250}
+gait:
+  kind: lateral_undulation
+  yaw_amplitude: [0.4, 0.8]
+  frequency: [0.5, 1.2]
+contact:
+  mode: hybrid

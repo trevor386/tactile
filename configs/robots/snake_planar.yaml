@@ -1,0 +1,19 @@
+# 12-link planar (yaw-only) snake used with the mock simulator.
+robot:
+  type: snake
+  params:
+    num_links: 12
+    link_length: 0.10
+    radius: 0.025
+    link_mass: 0.25
+    joint_axes: [z]
+sensors:
+  tactile:
+    placements:
+      - {generator: cylinder, bodies: "link_\\d+", n_rings: 3, n_per_ring: 8, skin: 0.002}
+  joint:
+    placements:
+      - {generator: joints}
+  imu:
+    placements:
+      - {generator: point, body: link_0, pos: [0.05, 0.0, 0.0], name: imu}
