@@ -202,6 +202,18 @@ class RobotDescription:
         path.write_text(self.to_urdf())
         return path
 
+    # -------------------------------------------------------------------- MJCF
+    def to_mjcf(self, **kwargs) -> str:
+        """MuJoCo XML (see :func:`somato.robots.mjcf.description_to_mjcf` for the options)."""
+        from somato.robots.mjcf import description_to_mjcf  # lazy: mjcf imports this module
+
+        return description_to_mjcf(self, **kwargs)
+
+    def write_mjcf(self, path: str | Path, **kwargs) -> Path:
+        from somato.robots.mjcf import write_mjcf
+
+        return write_mjcf(self, path, **kwargs)
+
     @classmethod
     def from_urdf(cls, source: str | Path) -> RobotDescription:
         """Parse a URDF file (or XML string). Mesh geometry is skipped (no tactile auto-placement)."""
