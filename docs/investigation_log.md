@@ -72,6 +72,26 @@ open problems, and the task queue. The design docs are `architecture.md`, `isaac
 * Fix for comparisons: `train.min_steps` (≥ ~3,000 updates at every fraction) + early stopping, with
   the head choice as an explicit factor.
 
+**Task ceiling (2026-10-08).** In mjlab, the terrain parameters that reach the sensors are:
+* friction, in the physics;
+* sinkage (taxel footprint width), texture amplitude and texture wavelength (taxel vibration), in the
+  taxel model.
+
+Isaac adds restitution. Anisotropy and undulation act only in the mock.
+
+Bayes-optimal accuracy with *perfect* knowledge of the parameters (uniform sampling within each class
+box, from the catalog):
+
+| parameters | Bayes accuracy |
+|---|---|
+| friction only | 0.795 |
+| friction + sinkage | 1.000 (same with texture and restitution added) |
+
+So the task is fully solvable in principle. Beyond ~0.80, a model must read sinkage or texture from the
+tactile signals: sinkage is 0 / ≤ 0.2 / 0.5–1.5 / 3–8 mm across classes and widens the taxel footprint.
+The Isaac flat baseline's 0.80 sits right at the friction-only ceiling. Whether any model passes it is
+the key question for the modality ablation.
+
 **Plateau location and TBPTT (2026-10-08, 300–600-step screens on mjlab data).**
 * Head without attention blocks (`cluster_layers: 0`): escapes after ~100 steps, val 0.41 at 300 steps.
   The attention blocks cause most of the delay, the token/LayerNorm path the rest.
