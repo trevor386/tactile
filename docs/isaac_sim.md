@@ -128,6 +128,27 @@ of 1.3 kPa but peaks above 65 kPa (0.01 % of samples), beyond float16: such arra
 Joint velocity reaches the 8 rad/s `velocity_limit` in 0.2 % of samples and torque the 6 Nm effort limit
 in 1.5 %. The IMU has heavy-tailed impact spikes (|acc| median 11.6, p99 33, max ~700 m/s²).
 
+Terrain classification with the default hierarchical model and FSR skin (`terrain_mock.yaml`, 20 epochs,
+RTX 3060 Ti; test split = 15 % of episodes):
+
+| training data | test acc (last step) | notes |
+|---|---|---|
+| 64 episodes (`--rounds 1 --num_envs 64`) | 0.27 | 44 training episodes, too few |
+| 600 episodes (`collect_isaac.yaml`) | 0.535 | training 7.5 s/epoch at 64 episodes, 75 s at 600; peak 6.6 GB at batch 32 |
+| same model, tested on the paired mjlab episodes | 0.515 | small sim-to-sim gap (`scripts/evaluate.py`) |
+
+Fresh snow is recognized perfectly (sinkage widens the taxel footprint); glare ice, rough ice and
+concrete are confused. The FSR model reports normal pressure only, so the network sees friction only
+indirectly (engineered features using the ideal shear/normal ratio separate concrete and glare ice at
+91–100 %, see `docs/mjlab.md`).
+
+Online (`online_demo.py`, 10 envs, streaming): **latency 19.7 ms median** per 20 ms latent step for all 10
+envs (sensor models + model on the GPU), but accuracy drops to 0.31 because the stage-1 recurrent state
+runs far beyond the 25-step (0.5 s) windows it was trained on. Offline the same drop appears with longer
+windows: `scripts/evaluate.py --window 25 / 75 / 150` gives 0.53 / 0.43 / 0.32. Fixing this is a
+training-protocol question (longer or random-length windows, state carried across windows, or a
+sliding reset online), not a simulator issue.
+
 The default Isaac robot is `configs/robots/snake_3d.yaml` (yaw/pitch joints) with a **sidewinding**
 gait, because PhysX friction is isotropic and lateral undulation barely propels without anisotropic
 friction. The mock simulator models scale anisotropy and uses lateral undulation.
