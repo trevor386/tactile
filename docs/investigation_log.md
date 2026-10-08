@@ -147,26 +147,48 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
    training and test (e.g. train on FSR v1, test on stronger hysteresis or a different skin model) as
    a proxy for sim-to-real robustness. Isaac → MuJoCo transfer is another proxy.
 
-## Task queue
+## Task queue (current plan; keep statuses current)
 
-- [x] Find why the hierarchical model learns slowly → cluster-attention head plateau (see findings).
-- [ ] Locate the plateau inside the head (attention blocks vs. token norm/pooling); remedy (e.g. identity-init
-      residual branches) if it is a pure initialization issue.
-- [ ] Modality ablation on mjlab data with protocol v2 (min_steps, early stopping): flat_gru / hierarchical
-      (both heads) / no_interaction × {all, tactile, joint+imu}; hierarchical + sensor_id_embedding.
-- [ ] 3 seeds at full data with protocol v2.
-- [ ] TBPTT with 6 chunks fails (see findings): test 3/4-chunk variants, and more distinct sequences per epoch.
-- [ ] Main experiment once v2 checks pass: learning curves (fractions × 3 seeds) along a spectrum of spatial
-      structure with stage 1 and the head fixed: flat vector → transformer over sensors with ID embeddings (no
-      geometry) → full attention + distance bias → local continuous-kernel graph → no interaction.
-- [ ] Inspect the hierarchical model's use of joint/IMU nodes (head pooling, normalizer statistics of
-      zero-inflated FSR readings).
-- [ ] Evaluate the TBPTT model (windows 25/75/150) and sliding-window inference; decide on a default.
-- [ ] Re-run the data-efficiency study on mjlab data with ≥ 3 seeds, once the above checks pass.
-- [ ] Ideal-shear skin vs FSR: how much does shear sensing help each architecture?
-- [ ] Robustness to sensor-model perturbation (hysteresis/creep/gain) between training and test.
-- [ ] Compliant skin in MuJoCo with stiff friction (explicit contact pairs with `solreffriction`), or a
-      skin-dynamics layer in the contact model; would also remove the flicker.
-- [ ] Physically modelled terrain compliance (per-env contact softness) in mjlab instead of only the
-      taxel-model sinkage.
-- [ ] Long-term: alternative stage-1/2/3 operators (TCN, transformer, receptor; GAT, full attention, EGNN).
+**Running now (GPU queue, sequential; logs in `runs/logs/`):**
+1. `runs/logs/queue_v2.sh`:
+   * protocol v2, all inputs, full data, seed 0 (`configs/experiments/protocol_v2_mjlab.yaml` → `runs/v2/all/`):
+     hierarchical (cluster head), hierarchical_meanmax, hierarchical_meanmax_sid, no_interaction, flat_gru.
+   * modality ablations (`protocol_v2_modality_mjlab.yaml`): tactile only → `runs/v2/tactile/`;
+     joint+imu only → `runs/v2/joint_imu/`.
+   * Results: each `runs/v2/*/summary.md` / `results.csv`; per-run `log.jsonl` and `result.json` (with confusion).
+2. `runs/logs/queue_v2b.sh` (starts after 1): ideal skin with shear, all inputs → `runs/v2/ideal_all/`.
+3. Background literature agent → `docs/references/sensor_terrain_calibration.md` (sensor hysteresis and
+   ice-friction parameter ranges).
+
+**Next, when the results are in:**
+- [ ] Analyse v2: does any model beat the friction-only ceiling (0.795)? Hierarchical vs flat after adequate
+      training? What does the sensor-ID embedding add? How do the heads compare? What does each modality carry?
+      What does ideal (shear) sensing add over FSR?
+- [ ] Decide the head for subsequent studies (meanmax vs cluster attention; or fix the cluster head's init plateau).
+- [ ] 3 seeds at full data for the key models (variance estimate).
+- [ ] Main experiment: learning curves (fractions 0.05–1.0 × 3 seeds, protocol v2) along a spectrum of spatial
+      structure with stage 1 and head fixed: flat vector → transformer over sensors + ID embeddings (no geometry) →
+      full attention + distance bias → local continuous-kernel graph → no interaction.
+- [ ] Robustness proxy for sim-to-real: evaluate trained models with `scripts/evaluate.py --sensors
+      configs/sensors/fsr_degraded.yaml` (stronger hysteresis/creep/gain spread) and on Isaac data (cross-sim).
+
+**Later / open:**
+- [ ] TBPTT fails with 6 chunks per sequence (2 chunks work): test 3/4-chunk variants and more distinct sequences per
+      epoch; until then use sliding-window inference (`OnlineEncoder(window=25)`) for streaming.
+- [ ] Use the literature review to recalibrate sensor-model parameters and terrain ranges; consider a skin-dynamics
+      (viscoelastic) layer in the contact model.
+- [ ] Compliant skin in MuJoCo with stiff friction (explicit contact pairs with `solreffriction`), or skin dynamics in
+      the contact model; would also remove the contact flicker.
+- [ ] Physically modelled terrain compliance (per-env contact softness) in mjlab instead of only the taxel-model sinkage.
+- [ ] Long-term: alternative stage-1/2/3 operators (TCN, transformer, receptor; GAT, full attention, EGNN), and whether
+      the three-stage abstraction itself is too restrictive.
+
+**Done (2026-10-07/08):**
+- Isaac Lab 2.3.2 / Isaac Sim 5.1 bring-up and validation.
+- mjlab backend and paired comparison; simulator decision (mjlab).
+- DC-motor actuator parity.
+- Streaming diagnosis; anti-aliasing.
+- float16 overflow fix.
+- Plateau diagnosis (cluster-attention head).
+- Protocol-v2 tools: min_steps, bf16, grad-norm logging, input_groups, evaluate --sensors.
+- Task ceiling analysis.
