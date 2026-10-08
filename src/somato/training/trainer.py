@@ -36,6 +36,7 @@ class TrainConfig:
     # Lower bound on optimizer steps: epochs are raised to reach it, so small training sets (learning curves) still
     # get enough updates to converge (combine with ``patience`` for early stopping). 0 = exactly ``epochs``.
     min_steps: int = 0
+    eval_every: int = 0  # validate every N optimizer steps instead of every epoch (patience then counts evaluations)
     amp: str = "none"  # "bf16": autocast forward/loss in bfloat16 on CUDA (neighbor search stays float32)
     device: str = "auto"
     num_workers: int = 0
@@ -128,11 +129,31 @@ class Trainer:
         sched = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda s: min(1.0, (s + 1) / warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / total_steps)))
         )
-        best_score, best_state, best_epoch, bad_epochs = -math.inf, None, -1, 0
+        best = {"score": -math.inf, "state": None, "epoch": -1, "step": 0, "bad": 0}
+        acc = {"t0": time.time(), "running": {}, "n": 0}
         step = 0
+
+        def checkpoint(epoch: int) -> bool:
+            """Validate, keep the best weights, log; returns True when early stopping triggers."""
+            n = max(1, acc["n"])
+            record = {"epoch": epoch, "step": step, "time": time.time() - acc["t0"], "lr": sched.get_last_lr()[0],
+                      **{f"train/{k}": v / n for k, v in acc["running"].items()}}
+            if val_ds is not None and len(val_ds) > 0:
+                record.update({f"val/{k}": v for k, v in self.evaluate(val_ds).items()})
+                score = record.get(f"val/{cfg.select_metric}", -record.get("val/loss", 0.0))
+                if score > best["score"]:
+                    best.update(score=score, epoch=epoch, step=step, bad=0, state=copy.deepcopy(self.model.state_dict()))
+                else:
+                    best["bad"] += 1
+            self.history.append(record)
+            self._log(record)
+            acc.update(t0=time.time(), running={}, n=0)
+            self.model.train()
+            return bool(cfg.patience and best["bad"] >= cfg.patience)
+
+        stop = False
         for epoch in range(epochs):
             self.model.train()
-            t0, running, n = time.time(), {}, 0
             for i, sample in enumerate(loader):
                 if cfg.max_steps_per_epoch and i >= cfg.max_steps_per_epoch:
                     break
@@ -150,29 +171,24 @@ class Trainer:
                     sched.step()
                     state = detach_state(state)
                     step += 1
-                    n += 1
+                    acc["n"] += 1
                     for k, v in {**parts, "grad_norm": float(gnorm)}.items():
-                        running[k] = running.get(k, 0.0) + v
+                        acc["running"][k] = acc["running"].get(k, 0.0) + v
                     if cfg.log_every and step % cfg.log_every == 0:
                         print(f"  step {step}: " + ", ".join(f"{k}={v:.4f}" for k, v in parts.items()))
-            n = max(1, n)
-            record = {"epoch": epoch, "time": time.time() - t0, "lr": sched.get_last_lr()[0],
-                      **{f"train/{k}": v / n for k, v in running.items()}}
-            if val_ds is not None and len(val_ds) > 0:
-                record.update({f"val/{k}": v for k, v in self.evaluate(val_ds).items()})
-                score = record.get(f"val/{cfg.select_metric}", -record.get("val/loss", 0.0))
-                if score > best_score:
-                    best_score, best_epoch, bad_epochs = score, epoch, 0
-                    best_state = copy.deepcopy(self.model.state_dict())
-                else:
-                    bad_epochs += 1
-            self.history.append(record)
-            self._log(record)
-            if cfg.patience and bad_epochs >= cfg.patience:
+                if cfg.eval_every and step % cfg.eval_every == 0 and checkpoint(epoch):
+                    stop = True
+                    break
+            if stop:
                 break
-        if best_state is not None:
-            self.model.load_state_dict(best_state)
-        return {"best_epoch": best_epoch, "best_score": best_score, "history": self.history}
+            if not cfg.eval_every and checkpoint(epoch):
+                break
+        if cfg.eval_every and acc["n"] and not stop:
+            checkpoint(epochs - 1)  # steps since the last evaluation
+        if best["state"] is not None:
+            self.model.load_state_dict(best["state"])
+        return {"best_epoch": best["epoch"], "best_step": best["step"], "best_score": best["score"],
+                "history": self.history}
 
     @torch.no_grad()
     def evaluate(self, ds: Dataset) -> dict[str, float]:

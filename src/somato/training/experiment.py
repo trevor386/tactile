@@ -149,6 +149,7 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
         "train_fraction": cfg.train_fraction,
         "seed": cfg.train.seed,
         "best_epoch": fit["best_epoch"],
+        "best_step": fit["best_step"],
         **{f"test/{k}": v for k, v in test.items()},
     }
     cls_tasks = [t for t in task_list if isinstance(t, ClassificationTask)]

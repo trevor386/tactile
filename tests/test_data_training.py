@@ -228,3 +228,15 @@ def test_min_steps_and_bf16(tmp_path, dataset_dir, store):
     log = [json.loads(line) for line in (tmp_path / "steps" / "log.jsonl").read_text().splitlines()]
     assert len(log) > 1  # epochs raised to reach min_steps
     assert 0.0 <= result["test/terrain/acc_last"] <= 1.0
+
+
+def test_eval_every_steps(tmp_path, dataset_dir, store):
+    cfg = ExperimentConfig(name="evalsteps", dataset=str(dataset_dir), output_dir=str(tmp_path), model=TINY_MODEL,
+                           sensors=IDEAL, train=TrainConfig(epochs=1, batch_size=4, output_steps=2, min_steps=7,
+                                                            eval_every=3),
+                           window=6, stride=3, split=(1 / 3, 1 / 3, 1 / 3), save_checkpoint=False)
+    result = run_experiment(cfg, store, verbose=False)
+    log = [json.loads(line) for line in (tmp_path / "evalsteps" / "log.jsonl").read_text().splitlines()]
+    steps = [r["step"] for r in log]
+    assert steps[:2] == [3, 6] and steps == sorted(steps) and "val/loss" in log[0]
+    assert result["best_step"] in steps
