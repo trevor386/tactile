@@ -62,6 +62,56 @@ def test_sensor_state_continuity():
         assert torch.allclose(full, torch.cat([a, b], 1), atol=1e-5), name
 
 
+def test_recursions_match_reference_loops():
+    """The partly vectorized sensor recursions equal the plain per-sample loops they replaced."""
+    torch.manual_seed(0)
+    x = torch.rand(2, 80, 5, 3) * 3e4
+    fsr = SENSOR_MODELS.build("fsr", dt=1e-3, noise_std=0.0, adc_bits=24)
+    st = fsr.init_state(x, torch.Generator().manual_seed(0))
+    out, new = fsr(x, {k: v.clone() for k, v in st.items()})
+    force = x[..., 0].clamp_min(0.0) * fsr.area
+    a_l, a_u = fsr.dt / (fsr.tau_load + fsr.dt), fsr.dt / (fsr.tau_unload + fsr.dt)
+    a_c = fsr.dt / (fsr.creep_tau + fsr.dt)
+    load, creep, ref = st["load"], st["creep"], []
+    for t in range(force.shape[1]):
+        f = force[:, t]
+        load = load + torch.where(f > load, a_l, a_u) * (f - load)
+        creep = creep + a_c * (load - creep)
+        ref.append(fsr._transfer(load + fsr.creep_frac * creep, st["gain"]))
+    ref = torch.stack(ref, 1).clamp(0, 1)
+    assert torch.allclose(out[..., 0], ref, atol=1e-6) and torch.allclose(new["load"], load, rtol=1e-5)
+
+    motor = SENSOR_MODELS.build("motor", dt=4e-3, torque_noise=0.0)
+    q = torch.randn(2, 60, 4, 4)
+    st = motor.init_state(q, torch.Generator().manual_seed(1))
+    out, new = motor(q, {k: v.clone() for k, v in st.items()})
+    pos_m = out[..., 0]
+    tau_raw = st["gain"][:, None] * (q[..., 2] + motor.tau_coulomb * torch.tanh(q[..., 1] / 0.05) + motor.viscous * q[..., 1])
+    a_v = 1 - torch.exp(torch.tensor(-2 * torch.pi * motor.vel_cutoff_hz * motor.dt))
+    a_t = 1 - torch.exp(torch.tensor(-2 * torch.pi * motor.torque_cutoff_hz * motor.dt))
+    prev, v_f, t_f, vels, taus = st["prev_pos"], st["vel"], st["torque"], [], []
+    for t in range(q.shape[1]):
+        v_f = v_f + a_v * ((pos_m[:, t] - prev) / motor.dt - v_f)
+        t_f = t_f + a_t * (tau_raw[:, t] - t_f)
+        prev = pos_m[:, t]
+        vels.append(v_f)
+        taus.append(t_f)
+    assert torch.allclose(out[..., 1], torch.stack(vels, 1), atol=1e-3)
+    assert torch.allclose(out[..., 2], torch.stack(taus, 1), atol=1e-5)
+
+    cap = SENSOR_MODELS.build("capacitive", dt=1e-3, noise_std=0.0, drift_std=0.0, resolution=1e-9)
+    st = cap.init_state(x, torch.Generator().manual_seed(2))
+    out, _ = cap(x, {k: v.clone() for k, v in st.items()})
+    inst = x[..., 0].clamp_min(0.0) / cap.modulus
+    a, visco, strains = cap.dt / (cap.tau_visco + cap.dt), st["visco"], []
+    for t in range(inst.shape[1]):
+        visco = visco + a * (inst[:, t] - visco)
+        strains.append((1 - cap.visco_frac) * inst[:, t] + cap.visco_frac * visco)
+    strain = torch.stack(strains, 1).clamp(max=1 - cap.min_gap_frac)
+    ref = st["gain"][:, None] * (1 / (1 - strain) - 1) + st["baseline"][:, None]
+    assert torch.allclose(out[..., 0], ref, atol=1e-6)
+
+
 def test_imu_noise_statistics():
     m = SENSOR_MODELS.build("mems_imu", dt=1e-3, acc_bias_std=0.0, gyro_bias_std=0.0, scale_std=0.0)
     x = torch.zeros(1, 4000, 1, 6)

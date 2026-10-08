@@ -100,14 +100,15 @@ class FSRTactile(SensorModel):
         a_unload = self.dt / (self.tau_unload + self.dt)
         a_creep = self.dt / (self.creep_tau + self.dt)
         load, creep, gain = state["load"], state["creep"], state["gain"]
-        outs = []
+        # Only the load/creep recursion is sequential (few kernels per sample); the elementwise conductance
+        # transfer then runs on the whole window at once.
+        eff = torch.empty_like(force)
         for t in range(force.shape[-2]):
             f = force[..., t, :]
-            alpha = torch.where(f > load, a_load, a_unload)
-            load = load + alpha * (f - load)
-            creep = creep + a_creep * (load - creep)
-            outs.append(self._transfer(load + self.creep_frac * creep, gain))
-        v = torch.stack(outs, dim=-2)
+            load = torch.lerp(load, f, torch.where(f > load, a_load, a_unload))
+            creep = torch.lerp(creep, load, a_creep)
+            torch.add(load, creep, alpha=self.creep_frac, out=eff[..., t, :])
+        v = self._transfer(eff, gain.unsqueeze(-2))
         if self.noise_std > 0:
             v = v + self.noise_std * randn_like(v, generator)
         v = quantize(v.clamp(0.0, 1.0), 1.0 / (2**self.adc_bits - 1))
@@ -148,11 +149,11 @@ class CapacitiveTactile(SensorModel):
         strain_inst = stimulus[..., 0].clamp_min(0.0) / self.modulus  # [*batch, T, N]
         a = self.dt / (self.tau_visco + self.dt)
         visco = state["visco"]
-        strains = []
+        viscos = torch.empty_like(strain_inst)
         for t in range(strain_inst.shape[-2]):
-            visco = visco + a * (strain_inst[..., t, :] - visco)
-            strains.append((1 - self.visco_frac) * strain_inst[..., t, :] + self.visco_frac * visco)
-        strain = torch.stack(strains, dim=-2).clamp(max=1.0 - self.min_gap_frac)
+            visco = torch.lerp(visco, strain_inst[..., t, :], a)
+            viscos[..., t, :] = visco
+        strain = ((1 - self.visco_frac) * strain_inst + self.visco_frac * viscos).clamp(max=1.0 - self.min_gap_frac)
         dc = state["gain"].unsqueeze(-2) * (1.0 / (1.0 - strain) - 1.0)
         # Baseline drift as a random walk over the window.
         steps = self.drift_std * math.sqrt(self.dt) * randn(strain.shape, strain, generator)

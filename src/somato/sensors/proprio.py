@@ -69,17 +69,17 @@ class MotorJoint(SensorModel):
         tau_raw = state["gain"].unsqueeze(-2) * motor_tau + self.torque_noise * randn_like(tau, generator)
         a_v = 1.0 - math.exp(-2 * math.pi * self.vel_cutoff_hz * self.dt)
         a_t = 1.0 - math.exp(-2 * math.pi * self.torque_cutoff_hz * self.dt)
-        prev, v_f, t_f = state["prev_pos"], state["vel"], state["torque"]
-        vels, taus = [], []
+        prev = torch.cat([state["prev_pos"].unsqueeze(-2), pos_m[..., :-1, :]], dim=-2)
+        raw = torch.stack([(pos_m - prev) / self.dt, tau_raw], dim=-1)  # [*batch, T, N, 2]: velocity, torque
+        # Both first-order low-pass recursions advance together (one kernel per sample).
+        a = torch.tensor([a_v, a_t], dtype=raw.dtype, device=raw.device)
+        y = torch.stack([state["vel"], state["torque"]], dim=-1)
+        filt = torch.empty_like(raw)
         for t in range(pos.shape[-2]):
-            v_raw = (pos_m[..., t, :] - prev) / self.dt
-            prev = pos_m[..., t, :]
-            v_f = v_f + a_v * (v_raw - v_f)
-            t_f = t_f + a_t * (tau_raw[..., t, :] - t_f)
-            vels.append(v_f)
-            taus.append(t_f)
-        out = torch.stack([pos_m, torch.stack(vels, -2), torch.stack(taus, -2), target - pos_m], dim=-1)
-        new_state = dict(state, prev_pos=prev, vel=v_f, torque=t_f)
+            y = torch.lerp(y, raw[..., t, :, :], a)
+            filt[..., t, :, :] = y
+        out = torch.stack([pos_m, filt[..., 0], filt[..., 1], target - pos_m], dim=-1)
+        new_state = dict(state, prev_pos=pos_m[..., -1, :], vel=y[..., 0], torque=y[..., 1])
         return out, new_state
 
 
