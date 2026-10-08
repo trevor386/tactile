@@ -180,6 +180,25 @@ set (`runs/v3/seed0/`). Test acc (training episodes):
 * NLL at 42 episodes: flat 3.9 vs hierarchical 2.0 (flat is badly overconfident).
 * **Caveat:** at full data every model's best checkpoint was the last evaluation (~3,400 steps), so all were still
   improving. A 10,000-step budget check is queued, then seeds 1–2.
+* **Per-class recall** (from the saved confusion matrices) locates both effects:
+
+  | class | 42 eps: flat | 42 eps: geometric | 1680 eps: flat | 1680 eps: hierarchical |
+  |---|---|---|---|---|
+  | fresh snow | 0.54 | 0.80–0.83 | 0.97 | 0.98 |
+  | concrete | 0.39 | 0.76–0.80 | 0.97 | 0.97 |
+  | glare ice | 0.48 | 0.34–0.62 | 0.94 | 0.89 |
+  | rough ice | 0.25 | 0.44–0.53 | 0.88 | 0.79 |
+  | packed snow | 0.46 | 0.52–0.57 | 0.92 | 0.88 |
+
+  * The low-data advantage of geometry is mostly fresh snow and concrete. Fresh snow is defined by sinkage, i.e.
+    a wider footprint across neighbouring taxels: a multi-taxel spatial pattern the geometric interaction captures
+    with few examples.
+  * Spatial interaction is *necessary* for it: no_interaction never exceeds 0.77 on fresh snow, while every
+    spatial model reaches 0.96–0.99 from 10 % of the data on.
+  * The flat model's full-data edge is in glare ice, rough ice and packed snow. These differ by overlapping
+    friction, texture amplitude and sub-mm sinkage: fine discrimination a position-indexed, expressive model finds
+    with enough data. That is exactly the cue suspected to be unrealistically visible (unfiltered texture). The
+    skin-filtered rerun (`runs/v3_skin/`) tests whether the flat model's full-data edge survives realistic texture.
 
 **Texture-reliance test (2026-10-08).** Protocol v2, 600-episode sets, 420 training episodes, seed 0, 90-episode test
 set (±3.5 points). `mjlab_terrain_600_notex` (texture amplitude 0) vs `mjlab_terrain_600_dc`:
