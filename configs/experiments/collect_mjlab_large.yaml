@@ -1,0 +1,33 @@
+# Large mjlab dataset for learning curves (same robot, gait, rates, terrains and actuator as collect_mjlab.yaml);
+# sized for the in-memory EpisodeStore (~5 MB/episode in RAM, ~12 GB for 2400 episodes):
+# 2400 episodes -> 360-episode validation and test sets at the 70/15/15 split, and room for small training fractions.
+#   python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab_large.yaml
+robot: configs/robots/snake_3d.yaml
+terrains: configs/terrains/ice_forms.yaml
+out: datasets/mjlab_terrain_2400
+seed: 1                   # not the 600-episode set's seed
+num_envs: 400
+rounds: 6                 # episodes = rounds * num_envs
+steps_per_episode: 150    # latent steps (3 s at 50 Hz)
+warmup_steps: 50          # let the snake settle and the gait ramp up
+rates:
+  physics_hz: 1000
+  control_hz: 100
+  latent_hz: 50
+  sensors: {tactile: 500, joint: 250, imu: 250}
+gait:
+  kind: sidewinding       # geom friction is isotropic in MuJoCo too
+  yaw_amplitude: [0.5, 0.9]
+  pitch_amplitude: [0.15, 0.3]
+  frequency: [0.4, 1.0]
+contact:
+  mode: hybrid
+mjlab:
+  env_spacing: 4.0
+  actuator: dc_motor      # same torque-speed curve as collect_isaac.yaml
+  stiffness: 20.0
+  damping: 0.5
+  effort_limit: 6.0       # continuous torque [Nm]
+  saturation_effort: 12.0 # stall torque [Nm]
+  velocity_limit: 8.0     # no-load speed [rad/s]
+  contact_solref: [0.02, 1.0]   # robot geom soft-contact time constant [s] and damping ratio

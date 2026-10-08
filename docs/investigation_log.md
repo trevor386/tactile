@@ -103,6 +103,25 @@ the key question for the modality ablation.
     To test: 4 chunks, 3 chunks.
 * bf16 autocast: 1.3× faster per step with identical learning curves; used for protocol v2.
 
+**Protocol v2, mjlab data, full data, seed 0 (2026-10-08).** min_steps 3000, early stopping, bf16, widths matched to
+~400 k params:
+
+| model | test acc | test NLL | notes |
+|---|---|---|---|
+| hierarchical_meanmax | **0.887** | **0.318** | best epoch 19/20, still improving |
+| hierarchical (cluster-attention head) | 0.880 | 0.326 | |
+| flat_gru | 0.874 | 0.469 | train loss 0.008, memorizes; best at epoch 12 |
+| hierarchical_meanmax_sid (+ sensor-ID embedding) | 0.857 | 0.446 | |
+| no_interaction | 0.752 | 0.652 | |
+
+* With adequate training the hierarchical model matches or beats the flat baseline and is better calibrated. The
+  v1 "flat wins" result was a training-budget artifact (plus Isaac data).
+* Stage 2 (geometric interaction) is worth +13 points.
+* Absolute sensor identity does not help (slightly worse).
+* All models exceed the friction-only ceiling (0.795) except no_interaction.
+* Caveat: one seed and a 90-episode test set (SE ≈ ±3 points), so the 1–2-point differences are noise. Next: a
+  larger dataset (thousands of episodes; mjlab collects 600 in 2 min) and ≥ 3 seeds.
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
