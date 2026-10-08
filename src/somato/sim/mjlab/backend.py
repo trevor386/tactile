@@ -19,7 +19,7 @@ import re
 
 import mujoco
 import torch
-from mjlab.actuator import IdealPdActuatorCfg
+from mjlab.actuator import DcMotorActuatorCfg, IdealPdActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.scene import Scene, SceneCfg
 from mjlab.sensor import BuiltinSensorCfg, ContactMatch, ContactSensorCfg, ObjRef
@@ -90,13 +90,10 @@ class MjlabBackend(SimBackend):
                 geom.solref = list(cfg.contact_solref)
             return spec
 
-        joints = tuple(re.escape(j) for j in desc.joint_names)
         robot = EntityCfg(
             spec_fn=spec_fn,
             init_state=EntityCfg.InitialStateCfg(pos=(0.0, 0.0, radius + cfg.spawn_clearance), joint_pos={".*": 0.0}),
-            articulation=EntityArticulationInfoCfg(actuators=(IdealPdActuatorCfg(
-                target_names_expr=joints, stiffness=cfg.stiffness, damping=cfg.damping,
-                effort_limit=cfg.effort_limit, armature=cfg.armature),)),
+            articulation=EntityArticulationInfoCfg(actuators=(self._actuator_cfg(),)),
         )
         sensors = [ContactSensorCfg(
             name=CONTACT,
@@ -112,6 +109,17 @@ class MjlabBackend(SimBackend):
         return SceneCfg(num_envs=cfg.num_envs, env_spacing=cfg.env_spacing,
                         terrain=TerrainEntityCfg(terrain_type="plane"),
                         entities={ROBOT: robot}, sensors=tuple(sensors))
+
+    def _actuator_cfg(self) -> IdealPdActuatorCfg:
+        cfg = self.cfg
+        common = dict(target_names_expr=tuple(re.escape(j) for j in self.desc.joint_names), stiffness=cfg.stiffness,
+                      damping=cfg.damping, effort_limit=cfg.effort_limit, armature=cfg.armature)
+        if cfg.actuator == "dc_motor":
+            return DcMotorActuatorCfg(**common, saturation_effort=cfg.saturation_effort,
+                                      velocity_limit=cfg.velocity_limit)
+        if cfg.actuator == "ideal_pd":
+            return IdealPdActuatorCfg(**common)
+        raise ValueError(f"Unknown actuator {cfg.actuator!r} (dc_motor | ideal_pd)")
 
     # ------------------------------------------------------------------ properties
     @property

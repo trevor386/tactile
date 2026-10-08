@@ -40,6 +40,14 @@ def test_state_shapes_and_materials(backend):
     assert s.body_pos[..., :2].abs().max() < 2.0
 
 
+def test_dc_motor_torque_speed_curve(backend):
+    from mjlab.actuator import DcMotorActuatorCfg
+
+    act = backend._actuator_cfg()
+    assert isinstance(act, DcMotorActuatorCfg)
+    assert (act.saturation_effort, act.velocity_limit, act.effort_limit) == (12.0, 8.0, 6.0)
+
+
 def test_reset_assigns_terrain(backend):
     backend.reset(torch.tensor([1, 2]), torch.tensor([4, 0]))
     assert backend.terrain.class_id[1:3].tolist() == [4, 0]

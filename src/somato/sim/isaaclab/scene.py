@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg
+from isaaclab.actuators import DCMotorCfg, IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, ImuCfg
@@ -58,13 +58,18 @@ def make_articulation_cfg(desc: RobotDescription, cfg: IsaacSnakeConfig) -> Arti
         spawn=spawn,
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, radius + cfg.spawn_clearance),
                                                    joint_pos={".*": 0.0}),
-        actuators={
-            "joints": IdealPDActuatorCfg(
-                joint_names_expr=[".*"], stiffness=cfg.stiffness, damping=cfg.damping,
-                effort_limit=cfg.effort_limit, velocity_limit=cfg.velocity_limit, armature=cfg.armature,
-            )
-        },
+        actuators={"joints": make_actuator_cfg(cfg)},
     )
+
+
+def make_actuator_cfg(cfg: IsaacSnakeConfig) -> IdealPDActuatorCfg:
+    common = dict(joint_names_expr=[".*"], stiffness=cfg.stiffness, damping=cfg.damping, effort_limit=cfg.effort_limit,
+                  velocity_limit=cfg.velocity_limit, armature=cfg.armature)
+    if cfg.actuator == "dc_motor":
+        return DCMotorCfg(**common, saturation_effort=cfg.saturation_effort, velocity_limit_sim=cfg.velocity_limit_sim)
+    if cfg.actuator == "ideal_pd":
+        return IdealPDActuatorCfg(**common)
+    raise ValueError(f"Unknown actuator {cfg.actuator!r} (dc_motor | ideal_pd)")
 
 
 def make_scene_cfg(desc: RobotDescription, layout: SensorLayout, cfg: IsaacSnakeConfig) -> InteractiveSceneCfg:

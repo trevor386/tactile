@@ -13,11 +13,21 @@ class IsaacSnakeConfig:
     device: str = "cuda:0"
     render_interval: int = 20  # physics steps per rendered frame when not headless
     urdf_dir: str = "outputs/urdf"  # where the generated URDF (and converted USD) are written
-    # Explicit PD actuator (so Isaac Lab computes the applied torque that motor sensing reports).
+    # Explicit PD actuator (so Isaac Lab computes the applied torque that motor sensing reports). The same actuator
+    # model is used by the mjlab backend:
+    #   "dc_motor": PD torque clipped to a linear DC-motor torque-speed curve: stall torque `saturation_effort` at
+    #               rest falling to zero at the no-load speed `velocity_limit`, capped at the continuous
+    #               `effort_limit` (Isaac Lab DCMotorCfg == mjlab DcMotorActuatorCfg). PhysX's joint velocity
+    #               limit is set to `velocity_limit_sim` (effectively unlimited, as in MuJoCo).
+    #   "ideal_pd": PD torque clipped at `effort_limit`; the URDF joint velocity becomes a hard PhysX velocity clamp,
+    #               which MuJoCo cannot reproduce (the behaviour of datasets collected before the switch).
+    actuator: str = "dc_motor"
     stiffness: float = 20.0
     damping: float = 0.5
     effort_limit: float = 6.0
+    saturation_effort: float = 12.0
     velocity_limit: float = 8.0
+    velocity_limit_sim: float = 1000.0
     armature: float = 0.002
     # Contact reporting:
     #   "per_body": one filtered contact sensor per link against the ground -> normal force, friction

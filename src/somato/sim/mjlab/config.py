@@ -11,10 +11,16 @@ class MjlabSnakeConfig:
     env_spacing: float = 4.0
     physics_dt: float = 1.0 / 1000.0
     device: str = "cuda:0"
-    # Explicit PD actuator (mjlab IdealPdActuatorCfg), same gains as the Isaac backend.
+    # Explicit PD actuator, same model and gains as the Isaac backend (see IsaacSnakeConfig): "dc_motor" clips the PD
+    # torque to the linear torque-speed curve (stall `saturation_effort`, no-load speed `velocity_limit`, continuous
+    # `effort_limit`; mjlab DcMotorActuatorCfg), "ideal_pd" clips at `effort_limit` only. MuJoCo has no joint
+    # velocity limit, so Isaac's former hard PhysX velocity clamp has no counterpart.
+    actuator: str = "dc_motor"
     stiffness: float = 20.0
     damping: float = 0.5
     effort_limit: float = 6.0
+    saturation_effort: float = 12.0
+    velocity_limit: float = 8.0
     armature: float = 0.002
     # MuJoCo solver. Contact buffers are per world: a resting 16-link snake has 32 ground contacts, i.e. 128
     # pyramidal constraint rows plus joint limits (mujoco-warp's defaults, 48/64, overflow silently).

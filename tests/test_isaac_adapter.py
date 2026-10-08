@@ -39,6 +39,10 @@ def test_backend_with_fake_isaaclab(fake_isaac, tmp_path, catalog, contact_mode)
     mats = backend.robot.root_physx_view.materials
     assert torch.allclose(mats[:, 0, 1], backend.terrain.friction.cpu())
     assert torch.allclose(mats[:, 0, 0], backend.terrain.friction.cpu() * cfg.static_friction_ratio)
+    # DC-motor torque-speed curve (as in the mjlab backend) and no hard PhysX joint velocity clamp
+    act = backend.robot.cfg.actuators["joints"]
+    assert type(act).__name__ == "DCMotorCfg" and act.saturation_effort == cfg.saturation_effort
+    assert act.velocity_limit == cfg.velocity_limit and act.velocity_limit_sim == cfg.velocity_limit_sim
 
     state = backend.get_state()
     E, Nb, Nj = 4, len(desc.body_names), len(desc.joint_names)

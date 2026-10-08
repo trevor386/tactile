@@ -23,8 +23,11 @@ contact:
 isaac:
   env_spacing: 4.0
   contact_mode: per_body  # per_body (normal + friction + contact point) | net (normal only)
+  actuator: dc_motor      # same torque-speed curve as collect_mjlab.yaml (ideal_pd = old hard 8 rad/s PhysX clamp)
   stiffness: 20.0
   damping: 0.5
-  effort_limit: 6.0
+  effort_limit: 6.0       # continuous torque [Nm]
+  saturation_effort: 12.0 # stall torque [Nm]
+  velocity_limit: 8.0     # no-load speed [rad/s]
   friction_sign: 1.0      # flip to -1.0 if validate_isaac.py reports friction_opposes_sliding FAIL
   urdf_dir: outputs/urdf

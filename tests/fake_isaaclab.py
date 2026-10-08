@@ -176,6 +176,7 @@ def install() -> None:
         setattr(sim, n, _cfg_class(n))
     actuators = types.ModuleType("isaaclab.actuators")
     actuators.IdealPDActuatorCfg = _cfg_class("IdealPDActuatorCfg")
+    actuators.DCMotorCfg = _cfg_class("DCMotorCfg")
     assets = types.ModuleType("isaaclab.assets")
     assets.ArticulationCfg = ArticulationCfg
     assets.AssetBaseCfg = _cfg_class("AssetBaseCfg")

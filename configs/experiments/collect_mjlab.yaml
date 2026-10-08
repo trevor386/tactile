@@ -23,7 +23,10 @@ contact:
   mode: hybrid
 mjlab:
   env_spacing: 4.0
+  actuator: dc_motor      # same torque-speed curve as collect_isaac.yaml
   stiffness: 20.0
   damping: 0.5
-  effort_limit: 6.0
+  effort_limit: 6.0       # continuous torque [Nm]
+  saturation_effort: 12.0 # stall torque [Nm]
+  velocity_limit: 8.0     # no-load speed [rad/s]
   contact_solref: [0.02, 1.0]   # robot geom soft-contact time constant [s] and damping ratio
