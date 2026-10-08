@@ -122,6 +122,27 @@ the key question for the modality ablation.
 * Caveat: one seed and a 90-episode test set (SE ≈ ±3 points), so the 1–2-point differences are noise. Next: a
   larger dataset (thousands of episodes; mjlab collects 600 in 2 min) and ≥ 3 seeds.
 
+**Modality ablation, protocol v2, mjlab, full data, seed 0 (2026-10-08).** Tactile only (FSR):
+
+| model | test acc | NLL |
+|---|---|---|
+| hierarchical_meanmax | **0.822** | 0.52 |
+| flat_gru | 0.752 | 1.01 |
+| no_interaction | 0.544 | 1.04 |
+
+| inputs | hierarchical_meanmax | flat_gru | no_interaction |
+|---|---|---|---|
+| all | **0.887** | 0.874 | 0.752 |
+| tactile only | **0.822** | 0.752 | 0.544 |
+| joint + IMU only | 0.685 | 0.661 | 0.683 |
+
+* Touch carries most of the terrain information. Proprioception alone (~0.68) stays below even the friction-only
+  ceiling: 0.5 s windows do not pin down friction from torques and motion.
+* Structure matters where there is spatial data. For the 16 proprioceptive sensors the architectures tie, and
+  stage 2 adds nothing. For the 384-taxel skin the structured model leads by 7 points, and stage 2 is worth 28.
+* The flat model fuses proprioception well (0.752 → 0.874 with all inputs), so at full data it nearly closes the
+  gap. Data efficiency is the open question for the v3 learning curves.
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
