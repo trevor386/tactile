@@ -262,46 +262,61 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
 
 ## Task queue (current plan; keep statuses current)
 
-**Running now (GPU queue, sequential; logs in `runs/logs/`):**
-First v2 result: hierarchical (cluster head), mjlab data, full data → **test acc 0.880** (NLL 0.33). Well above
-the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac data gave 0.628.
-1. `runs/logs/queue_v2.sh`:
-   * protocol v2, all inputs, full data, seed 0 (`configs/experiments/protocol_v2_mjlab.yaml` → `runs/v2/all/`):
-     hierarchical (cluster head), hierarchical_meanmax, hierarchical_meanmax_sid, no_interaction, flat_gru.
-   * modality ablations (`protocol_v2_modality_mjlab.yaml`): tactile only → `runs/v2/tactile/`;
-     joint+imu only → `runs/v2/joint_imu/`.
-   * Results: each `runs/v2/*/summary.md` / `results.csv`; per-run `log.jsonl` and `result.json` (with confusion).
-2. `runs/logs/queue_v2b.sh` (starts after 1): ideal skin with shear, all inputs → `runs/v2/ideal_all/`.
-3. (done) Literature review → `docs/references/sensor_terrain_calibration.md`.
+### RESUME HERE (state as of 2026-10-08 ~18:00)
 
-4. `runs/logs/queue_v2c.sh`: collect `datasets/mjlab_terrain_2400` (seed 1; `collect_mjlab_large.yaml`).
-5. Main-study seed 0 and the texture test are done (see findings). Running: 10k-step budget check at full data
-   (`configs/experiments/budget_v3_mjlab.yaml` → `runs/v3/budget10k/`). Then `runs/logs/queue_v3d.sh`:
-   * collect `datasets/mjlab_terrain_2400_skin` (`collect_mjlab_large_skin.yaml`, texture_filter 3.5 mm);
-   * main study on it, seed 0 → `runs/v3_skin/seed0/`, then seeds 1, 2 → `runs/v3_skin/seed12/`;
+**Running now (GPU, sequential, unattended):**
+1. Step-budget check, started 16:26: `configs/experiments/budget_v3_mjlab.yaml` → `runs/v3/budget10k/`, log
+   `runs/logs/v3_budget10k.log`. flat_gru, attn_dist and hierarchical_meanmax at full data (1,680 episodes, 10,000 steps).
+   * Question: does the flat model's full-data edge (0.937 vs 0.90 at 3,400 steps) survive when the structured
+     models get more steps?
+   * Interim: flat val 0.94 at ~8k steps.
+2. Then `runs/logs/queue_v3d.sh` (log `runs/logs/queue_v3d.log`), automatically:
+   * collect `datasets/mjlab_terrain_2400_skin` (`collect_mjlab_large_skin.yaml`, texture_filter 3.5 mm,
+     paired with `mjlab_terrain_2400`);
+   * main study on it, seed 0 → `runs/v3_skin/seed0/`;
+   * seeds 1, 2 → `runs/v3_skin/seed12/`;
    * main study seeds 1, 2 on the unfiltered data → `runs/v3/seed12/`.
-   Roughly 5 h per seed batch.
-   (Original plan, kept for reference) `runs/logs/queue_v3b.sh`: **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
-   0.025/0.1/0.25/1.0 of 1,680 training episodes. Structure spectrum with shared stage 1 and mean+max head:
-   flat_gru → attn_sid (transformer + sensor IDs, no geometry) → attn_dist (attention + distance prior) →
-   hierarchical_meanmax (local continuous kernel) → no_interaction. Protocol v3: 3,000 steps for every run,
-   validation every 250 steps, best checkpoint, checkpoints saved. Seed 0 → `runs/v3/seed0/`. Then the
-   **texture-reliance test**: collect `datasets/mjlab_terrain_600_notex` (`collect_mjlab_notex.yaml`, texture
-   amplitude 0, otherwise paired with `mjlab_terrain_600_dc`) and train hierarchical_meanmax / no_interaction /
-   flat_gru → `runs/v2/notex/`; compare with `runs/v2/all/`. Then seeds 1, 2 → `runs/v3/seed12/`. About 4–5 h
-   per v3 seed batch.
+   * Roughly 5 h per seed batch, ~16 h total.
 
-**Next, when the results are in:**
-- [ ] Analyse v2: does any model beat the friction-only ceiling (0.795)? Hierarchical vs flat after adequate
-      training? What does the sensor-ID embedding add? How do the heads compare? What does each modality carry?
-      What does ideal (shear) sensing add over FSR?
-- [ ] Decide the head for subsequent studies (meanmax vs cluster attention; or fix the cluster head's init plateau).
-- [ ] 3 seeds at full data for the key models (variance estimate).
-- [ ] Main experiment: learning curves (fractions 0.05–1.0 × 3 seeds, protocol v2) along a spectrum of spatial
-      structure with stage 1 and head fixed: flat vector → transformer over sensors + ID embeddings (no geometry) →
-      full attention + distance bias → local continuous-kernel graph → no interaction.
-- [ ] Robustness proxy for sim-to-real: evaluate trained models with `scripts/evaluate.py --sensors
-      configs/sensors/fsr_degraded.yaml` (stronger hysteresis/creep/gain spread) and on Isaac data (cross-sim).
+**Check status:**
+```bash
+cat runs/logs/queue_v3d.log
+pgrep -af "data_efficiency|collect_mjlab"
+cat runs/v3/budget10k/summary.md
+```
+Each study writes `summary.md`, `results.csv` and `learning_curves.png`; per run there is a `log.jsonl` (step, val,
+grad_norm), a `result.json` (test metrics, best_step, confusion) and a `model.pt` (v3 studies save checkpoints).
+
+**Environment** (scratchpad helpers are wiped on reboot): `conda activate mjlab` after
+`unset PYTHONPATH` and stripping `/opt/ros` from `LD_LIBRARY_PATH` (ROS Jazzy is sourced in `~/.bashrc`). Run GPU jobs
+one at a time (8 GB card; hierarchical training peaks at ~6.6 GB).
+
+**Analyse when each result lands** (done by the main Opus session, not delegated):
+- Budget check: compare 10k-step test acc with the 3.4k-step v3 seed-0 numbers (flat 0.937, attn_dist 0.895,
+  hierarchical 0.902). Check best_step: still improving at 10k? Is the full-data crossover a budget artifact?
+- v3_skin seed 0 vs v3 seed 0 (paired data, only the texture filter differs):
+  * Does the structured models' low-data advantage persist? It is mostly fresh snow and concrete (sinkage
+    footprint), which the filter should not affect.
+  * Does the flat model's full-data edge on glare/rough/packed shrink?
+  * Per-class recall from the confusion matrices.
+- Seeds 1, 2: means ± std. Are the differences beyond seed noise? The test set is 360 episodes (SE ~±2 points).
+- Robustness: `scripts/evaluate.py --checkpoint <run>/model.pt --dataset datasets/mjlab_terrain_2400[_skin]
+  --sensors configs/sensors/fsr_degraded.yaml` on the v3 checkpoints, comparing the accuracy drop per architecture
+  (sim-to-real proxy). Also cross-simulator: evaluate on Isaac data. That needs a paired Isaac dataset with the same
+  layout; `datasets/isaac_terrain_600_dc` exists (600 episodes, unfiltered texture).
+
+**Decisions made, not to revisit without reason:**
+* mjlab is the primary simulator.
+* Protocol v3 (fixed step budget, step-based validation, best checkpoint, bf16).
+* The mean+max head is the default for comparisons; the cluster-attention head has a ~200-step init plateau.
+* Analysis is done in the main session; subagents only for bulky low-judgment or easy Sonnet tasks.
+* File edits with the Edit/Write tools.
+
+**Next (after the above):**
+- [ ] Write up the Phase 1 picture so far for the user (structure vs data efficiency, the sensor-physics
+      dependence, realism caveats).
+- [ ] Robustness proxy runs (see above).
+- [ ] Decide whether the primary dataset should be the skin-filtered one (likely yes, if the analysis supports it).
 
 **Sim realism (from `docs/references/sensor_terrain_calibration.md`, literature review 2026-10-08):**
 - [ ] Texture reliance test (queued in queue_v3b): if accuracy drops a lot without texture, the models exploit a cue
