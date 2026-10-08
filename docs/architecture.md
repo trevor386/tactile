@@ -40,6 +40,16 @@ lower-frequency, position-agnostic latent and absorbs dynamics (vibration) and a
   volts, capacitance ratios and torques live on different scales.
 * **Streaming**: running `L` steps at once equals `L` single-step calls (tested for every encoder).
   Deployment uses `somato.runtime.OnlineEncoder`.
+* **Training horizon vs. deployment horizon.** By default each training window (25 latent steps = 0.5 s)
+  starts from a zero state, so the recurrent state is never trained beyond 0.5 s of history. In streaming
+  deployment it runs indefinitely, and accuracy decays with time since reset: on Isaac data it falls from
+  0.58 at 0.5 s to 0.33 at 3 s. With a fresh 25-step state it stays at 0.55–0.60. The sensor models'
+  own state (FSR hysteresis/creep, IMU bias walk) does not contribute: streaming vs. per-window sensor
+  state changes accuracy by < 0.03. Two opt-in remedies leave the architecture unchanged:
+  * `train_sequence: N` (training): crops of `N` steps processed in `window`-step chunks with the state
+    carried, detached, between chunks (truncated BPTT). This trains predictions at every horizon up to `N`.
+  * `OnlineEncoder(window=N)` / `online_demo.py --window N` (deployment): re-run the model on the last
+    `N` steps from a fresh state at every step. This is exactly the training regime, at ~`N`× stage-1 cost.
 
 ## 3. Stage 2: geometry-informed interaction
 
