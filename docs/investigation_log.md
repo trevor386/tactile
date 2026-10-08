@@ -159,6 +159,28 @@ the key question for the modality ablation.
 So the appropriate inductive bias is not fixed: it depends on the sensor physics. This matters for sim-to-real,
 because real skins differ in what each taxel resolves.
 
+**MAIN STUDY v3, seed 0 (2026-10-08): learning curves along a structure spectrum.** mjlab_terrain_2400, FSR skin,
+shared stage 1 + mean+max head, ~324 k params each, 3,000 steps per run, best-val checkpoint, 360-episode test
+set (`runs/v3/seed0/`). Test acc (training episodes):
+
+| model (stage 2) | 42 | 168 | 420 | 1680 |
+|---|---|---|---|---|
+| flat_gru (no structure) | 0.419 | 0.756 | 0.877 | **0.937** |
+| attn_sid (attention + sensor IDs, no geometry) | 0.457 | 0.806 | 0.855 | 0.885 |
+| attn_dist (attention + distance prior) | **0.631** | 0.831 | 0.878 | 0.895 |
+| hierarchical_meanmax (local continuous kernel) | 0.612 | **0.834** | 0.878 | 0.902 |
+| no_interaction | 0.421 | 0.771 | 0.778 | 0.830 |
+
+* **A data-efficiency vs. structure trade-off, as hypothesized.**
+  * Geometric structure wins at low data: +19–21 points at 42 episodes, +8 at 168. Flat needs ~2–2.5× the data
+    to match.
+  * The curves cross at ~420 episodes. At 1,680 episodes the unstructured flat model is best.
+* A soft distance prior (attn_dist) is as data-efficient as strict locality. Attention without geometry is only
+  slightly better than flat at low data and worse at full data.
+* NLL at 42 episodes: flat 3.9 vs hierarchical 2.0 (flat is badly overconfident).
+* **Caveat:** at full data every model's best checkpoint was the last evaluation (~3,400 steps), so all were still
+  improving. A 10,000-step budget check is queued, then seeds 1–2.
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
@@ -218,7 +240,10 @@ the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac dat
 3. (done) Literature review → `docs/references/sensor_terrain_calibration.md`.
 
 4. `runs/logs/queue_v2c.sh`: collect `datasets/mjlab_terrain_2400` (seed 1; `collect_mjlab_large.yaml`).
-5. `runs/logs/queue_v3b.sh` (replaces queue_v3.sh, which was stopped while still waiting): **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
+5. Main-study seed 0 done (see findings). Now `runs/logs/queue_v3c.sh`: texture test (`runs/v2/notex/`) →
+   10k-step budget check at full data (`configs/experiments/budget_v3_mjlab.yaml` → `runs/v3/budget10k/`) →
+   v3 seeds 1, 2 (`runs/v3/seed12/`).
+   (Original plan, kept for reference) `runs/logs/queue_v3b.sh`: **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
    0.025/0.1/0.25/1.0 of 1,680 training episodes. Structure spectrum with shared stage 1 and mean+max head:
    flat_gru → attn_sid (transformer + sensor IDs, no geometry) → attn_dist (attention + distance prior) →
    hierarchical_meanmax (local continuous kernel) → no_interaction. Protocol v3: 3,000 steps for every run,

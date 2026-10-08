@@ -1,0 +1,16 @@
+# Step-budget check for the v3 learning curves: at the full training set every model was still improving when the
+# 3000-step budget ended (best checkpoint = last evaluation). Same protocol with 10000 steps, full data only.
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_2400
+  train: {epochs: 1, min_steps: 10000, eval_every: 500, patience: 0, amp: bf16}
+output_dir: runs/v3/budget10k
+fractions: [1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: true
+reference_model: hierarchical_meanmax
+models:
+  flat_gru: configs/models/flat_gru.yaml
+  attn_dist: configs/models/spectrum/attn_dist.yaml
+  hierarchical_meanmax: configs/models/hierarchical_meanmax.yaml
