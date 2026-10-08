@@ -1,0 +1,38 @@
+"""mjlab (MuJoCo-Warp) backend configuration (pure python; importable without mjlab)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class MjlabSnakeConfig:
+    num_envs: int = 64
+    env_spacing: float = 4.0
+    physics_dt: float = 1.0 / 1000.0
+    device: str = "cuda:0"
+    # Explicit PD actuator (mjlab IdealPdActuatorCfg), same gains as the Isaac backend.
+    stiffness: float = 20.0
+    damping: float = 0.5
+    effort_limit: float = 6.0
+    armature: float = 0.002
+    # MuJoCo solver. Contact buffers are per world: a resting 16-link snake has 32 ground contacts, i.e. 128
+    # pyramidal constraint rows plus joint limits (mujoco-warp's defaults, 48/64, overflow silently).
+    solver: str = "newton"
+    iterations: int = 20
+    ls_iterations: int = 10
+    # Elliptic friction cones: with mujoco-warp 3.11 the Newton solver returns NaN contact forces for pyramidal
+    # cones at mu <= ~0.07 (glare ice) within ~20 ms of gait onset; elliptic cones (or the CG solver) do not.
+    cone: str = "elliptic"
+    impratio: float = 1.0
+    nconmax: int = 64
+    njmax: int = 256
+    # Soft-contact parameters of the robot geoms (time constant [s], damping ratio). Robot geoms get priority 1,
+    # so their friction and solref override the ground's (MuJoCo otherwise takes the max of the two frictions).
+    contact_solref: tuple[float, float] = (0.02, 1.0)
+    # Recompute kinematics, contacts and sensors after each step so the reported state is the post-step state
+    # (as in Isaac Lab). Without it, body poses and sensors lag joint positions by one physics step.
+    forward_after_step: bool = True
+    use_native_imu: bool = True
+    self_collision: bool = False
+    spawn_clearance: float = 0.003  # m above resting height

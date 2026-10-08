@@ -36,6 +36,7 @@ class CollectConfig:
     contact: ContactModelConfig = field(default_factory=ContactModelConfig)
     mock: PlanarSnakeConfig = field(default_factory=PlanarSnakeConfig)
     isaac: dict[str, Any] = field(default_factory=dict)  # IsaacSnakeConfig overrides
+    mjlab: dict[str, Any] = field(default_factory=dict)  # MjlabSnakeConfig overrides
 
     @classmethod
     def from_yaml(cls, path, overrides: dict | None = None) -> CollectConfig:

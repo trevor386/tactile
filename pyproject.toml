@@ -25,6 +25,7 @@ where = ["src"]
 testpaths = ["tests"]
 markers = [
     "isaac: requires Isaac Lab / Isaac Sim (skipped when not installed)",
+    "mjlab: requires mjlab (MuJoCo-Warp) and a CUDA GPU (skipped otherwise)",
     "slow: longer-running integration tests",
 ]
 
