@@ -1,0 +1,19 @@
+# Main Phase 1 study: learning curves along a spectrum of imposed spatial structure (stage 1 and head fixed),
+# protocol v3: every run gets the same optimizer-step budget (min_steps; epochs=1 so the budget sets the length),
+# validation every eval_every steps with best-checkpoint selection (no early stopping), bf16, widths matched.
+#   python scripts/data_efficiency.py --config configs/experiments/curves_v3_mjlab.yaml [--set seeds=[1,2] output_dir=...]
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_2400
+  train: {epochs: 1, min_steps: 3000, eval_every: 250, patience: 0, amp: bf16}
+output_dir: runs/v3/seed0
+fractions: [0.025, 0.1, 0.25, 1.0]
+seeds: [0]
+match_params: true
+reference_model: hierarchical_meanmax
+models:
+  flat_gru: configs/models/flat_gru.yaml
+  attn_sid: configs/models/spectrum/attn_sid.yaml
+  attn_dist: configs/models/spectrum/attn_dist.yaml
+  hierarchical_meanmax: configs/models/hierarchical_meanmax.yaml
+  no_interaction: configs/models/no_interaction.yaml

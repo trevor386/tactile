@@ -1,0 +1,9 @@
+# Structure spectrum, weak geometric prior: shared stage 1, global self-attention over all sensors with a learned
+# -lambda * d^2 distance bias (locality is a soft prior that attention can override), no sensor-ID embedding,
+# mean+max head.
+architecture: hierarchical
+dim: 64
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial: {type: full_attention, num_layers: 2, edge_features: none, length_scale: 0.05, params: {heads: 4, distance_prior: true}}
+heads:
+  terrain: {type: global, pool: meanmax, hidden: 128}
