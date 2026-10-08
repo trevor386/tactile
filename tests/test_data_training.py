@@ -65,6 +65,16 @@ def test_episode_roundtrip(tmp_path, store):
     assert int(back.labels["terrain"]) == int(ep.labels["terrain"])
 
 
+def test_episode_keeps_values_beyond_float16(tmp_path):
+    # Isaac Sim produces taxel pressure peaks above the float16 range (65504 Pa); they must not become inf.
+    ep = Episode(data={"tactile": torch.tensor([[1.0, 7.0e4]]), "imu": torch.tensor([[0.5, 9.81]])},
+                 body_pos=torch.zeros(1, 2, 3), body_quat=torch.zeros(1, 2, 4))
+    ep.save(tmp_path / "ep.npz")
+    back = Episode.load(tmp_path / "ep.npz")
+    assert torch.equal(back.data["tactile"].float(), ep.data["tactile"])
+    assert back.data["imu"].dtype == torch.float16
+
+
 def test_windows_and_splits(store):
     ds = WindowDataset(store, [0, 1], window=5, stride=3)
     assert len(ds) == 2 * 3

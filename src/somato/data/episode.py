@@ -9,7 +9,8 @@ A dataset directory contains::
 
 Each episode file holds, for ``T`` latent steps:
 
-* ``data/<group>``: ``[T, S_g, N_g, C]`` float16 -- ideal stimuli (simulation) or raw readings (hardware)
+* ``data/<group>``: ``[T, S_g, N_g, C]`` float16 -- ideal stimuli (simulation) or raw readings (hardware);
+  float32 for arrays that exceed the float16 range (e.g. taxel pressure peaks above 65 kPa in Isaac Sim)
 * ``body_pos`` ``[T, Nb, 3]`` / ``body_quat`` ``[T, Nb, 4]``: body poses at the end of each latent step
 * ``label/<name>``: per-episode scalars (``terrain``) or per-step arrays (``slip_speed [T, Nb]``)
 * ``param/<name>``: per-episode terrain parameters (for regression tasks / analysis)
@@ -32,6 +33,15 @@ from somato.robots.description import RobotDescription
 from somato.utils.config import load_yaml, save_yaml
 
 
+_F16_MAX = float(np.finfo(np.float16).max)
+
+
+def _compact(x: np.ndarray) -> np.ndarray:
+    """float16 when every finite value fits, else float32 (a cast would turn the overflow into inf)."""
+    finite = x[np.isfinite(x)]
+    return x.astype(np.float16) if finite.size == 0 or np.abs(finite).max() <= _F16_MAX else x.astype(np.float32)
+
+
 @dataclass
 class Episode:
     data: dict[str, torch.Tensor]
@@ -50,10 +60,10 @@ class Episode:
             "body_quat": self.body_quat.float().cpu().numpy(),
         }
         for k, v in self.data.items():
-            arrays[f"data/{k}"] = v.cpu().numpy().astype(np.float16)
+            arrays[f"data/{k}"] = _compact(v.cpu().numpy())
         for k, v in self.labels.items():
             v = torch.as_tensor(v).cpu()
-            arrays[f"label/{k}"] = v.numpy() if not v.is_floating_point() else v.numpy().astype(np.float16)
+            arrays[f"label/{k}"] = v.numpy() if not v.is_floating_point() else _compact(v.numpy())
         for k, v in self.params.items():
             arrays[f"param/{k}"] = np.asarray(v, dtype=np.float32)
         np.savez_compressed(path, **arrays)
