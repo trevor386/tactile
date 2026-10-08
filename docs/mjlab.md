@@ -74,3 +74,30 @@ At rest MuJoCo's soft contacts are smooth (no step-to-step chatter), unlike Phys
 needed more solver iterations. `friction_opposes_sliding` is lower in MuJoCo (0.93 vs 0.999); not yet
 investigated. Plausible causes are soft-contact creep and the netforce sensor combining a link's two
 capsule-end contacts into one force at their weighted centroid.
+
+## Isaac vs MuJoCo: what the sensors see
+
+`scripts/compare_datasets.py datasets/isaac_terrain_600 datasets/mjlab_terrain_600` compares 600 paired
+episodes from each simulator. Episode *i* has the same terrain class, friction, heading and joint-target
+trajectory in both (same seed), so the differences come from the physics. Main results (Isaac / mjlab):
+
+* **Friction readout agrees.** Per-episode shear/normal ratio vs the friction parameter: r = 0.991 /
+  0.992. Between the paired episodes: r = 0.999. Total contact force / weight: 1.00 / 0.995.
+* **Locomotion mostly agrees.** Centroid speed is 0.443 / 0.412 m/s (paired r = 0.82). In the 384
+  "calm" episodes (no flip, no unloading, no velocity spike in either simulator) the paired speeds give
+  r = 0.994.
+* **Contact patterns differ.** Links in contact: 3.0 / 2.2. Active taxels: 16 / 13. mjlab taxels
+  flicker about 5× more (on/off toggles per taxel-second: 4 / 20), and its link-force spectrum carries
+  1.6–2.2× more power at 20–100 Hz.
+* **Tumbling and velocity spikes appear in mjlab.** Episodes with the head upside down: 5 / 32. Joint
+  velocities in MuJoCo reach 43 rad/s, in 219 episodes, mostly on torque-saturated middle joints;
+  Isaac clips at the actuator's 8 rad/s `velocity_limit`, and MuJoCo has no joint velocity limit.
+  **This asymmetry in configuration confounds the comparison** and should be removed (the same
+  velocity limit, or a torque-speed curve, in both) before drawing physics conclusions.
+* **IMU.** Isaac has rarer but larger impact spikes: |acc| p99.9 is 173 / 129 m/s² and the max is
+  902 / 416. In Isaac, 66 % of the |acc| power lies above 25 Hz; in mjlab, 40 %.
+* **Separability.** From five engineered features (logistic regression, 5-fold CV, chance 20 %):
+  77.7 % / 79.0 %. A model trained on Isaac reaches 75.2 % on mjlab; the reverse direction gives
+  66.3 %. Glare ice and concrete are recognised at 91–100 %, while rough ice, packed snow and fresh snow
+  are confused with each other. Their friction ranges overlap, and the remaining differences (texture,
+  sinkage) act only through the taxel contact model.
