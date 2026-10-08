@@ -133,3 +133,21 @@ def test_validation_suite_passes_on_mock(mock_runner):
     results = v.run()
     failed = [r.line() for r in results if r.passed is False]
     assert not failed, "\n".join(failed)
+
+
+def test_texture_spatial_filter(catalog):
+    import math
+
+    gen = torch.Generator().manual_seed(0)
+    terrain = catalog.sample(torch.tensor([1, 3]), gen)  # rough ice (short wavelengths), fresh snow (longer)
+    xy = torch.rand(2, 4000, 2, generator=gen)
+    raw = terrain.texture(xy)
+    assert torch.allclose(terrain.texture(xy, 0.0), raw)
+    filtered = terrain.texture(xy, 0.0035)
+    # rough ice: 2-6 mm wavelengths are essentially erased; fresh snow (5-15 mm) keeps a fraction
+    assert filtered[0].std() < 0.05 * raw[0].std()
+    assert 0.05 * raw[1].std() < filtered[1].std() < raw[1].std()
+    # a single long wave passes almost unchanged
+    k = terrain.texture_k.norm(dim=-1)
+    assert math.exp(-0.5 * (2 * math.pi / 0.2 * 0.0035) ** 2) > 0.99
+    assert k.min() > 0

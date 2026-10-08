@@ -15,6 +15,7 @@ taxels:
    ``p_k = skin_stiffness * delta_k`` instead (no physics forces needed).
 3. **Micro-texture** modulates pressure by ``1 + A * texture(x_k, y_k)``, a spatial random field of
    the terrain; sliding over it produces vibration at frequency ``v / wavelength`` (absent when stuck).
+   ``texture_filter`` attenuates it as felt through the skin and the taxel's area (spatial low-pass).
 4. **Shear** is the body's friction force distributed like pressure, or, when the backend cannot
    report friction, a regularized Coulomb estimate ``-mu p_k v_t / sqrt(|v_t|^2 + eps^2)`` from the
    taxel's sliding velocity. It is expressed in the taxel frame (``shear_x``, ``shear_y``).
@@ -40,6 +41,11 @@ class ContactModelConfig:
     skin_stiffness: float = 3.0e7  # Pa per m of indentation (penetration mode)
     slip_eps: float = 0.01  # m/s, Coulomb regularization for estimated shear
     texture: bool = True
+    # Spatial low-pass of the micro-texture as felt through the skin [m]: a taxel averages pressure over its area and
+    # the elastomer spreads load over about its thickness, so each texture wave is attenuated by
+    # exp(-|k|^2 sigma^2 / 2) with sigma^2 ~ skin_thickness^2 + taxel_side^2 / 12 (2 mm skin, 1 cm taxels -> ~3.5 mm).
+    # 0 = texture sampled at the taxel centre, unfiltered (the default; earlier datasets).
+    texture_filter: float = 0.0
 
 
 class TaxelContactModel:
@@ -102,7 +108,7 @@ class TaxelContactModel:
             traction = -(mu * pressure).unsqueeze(-1) * v_t / torch.sqrt(v_t.pow(2).sum(-1, keepdim=True) + c.slip_eps**2)
 
         if c.texture:
-            mod = 1.0 + terrain.texture_amp.unsqueeze(-1) * terrain.texture(pos[..., :2])
+            mod = 1.0 + terrain.texture_amp.unsqueeze(-1) * terrain.texture(pos[..., :2], c.texture_filter)
             pressure = pressure * mod.clamp_min(0.0)
 
         shear_x = (traction * rot[..., :, 0]).sum(-1)

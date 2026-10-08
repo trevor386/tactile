@@ -70,17 +70,25 @@ class TerrainBatch:
         return self.class_id.shape[0]
 
     @staticmethod
-    def _field(xy: torch.Tensor, k: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
-        """Unit-variance random field: ``xy [E, ..., 2]`` -> ``[E, ...]``."""
+    def _field(xy: torch.Tensor, k: torch.Tensor, phase: torch.Tensor, sigma: float = 0.0) -> torch.Tensor:
+        """Unit-variance random field: ``xy [E, ..., 2]`` -> ``[E, ...]``.
+
+        ``sigma > 0`` low-pass filters it as seen through a Gaussian aperture of that width: each plane wave is
+        attenuated by ``exp(-|k|^2 sigma^2 / 2)``.
+        """
         E, M = phase.shape
         extra = xy.dim() - 2
         kk = k.view(E, *([1] * extra), M, 2)
         ph = phase.view(E, *([1] * extra), M)
         arg = (xy.unsqueeze(-2) * kk).sum(-1) + ph
-        return torch.sin(arg).sum(-1) * math.sqrt(2.0 / M)
+        waves = torch.sin(arg)
+        if sigma > 0:
+            waves = waves * torch.exp(-0.5 * (kk.norm(dim=-1) * sigma) ** 2)
+        return waves.sum(-1) * math.sqrt(2.0 / M)
 
-    def texture(self, xy: torch.Tensor) -> torch.Tensor:
-        return self._field(xy, self.texture_k, self.texture_phase)
+    def texture(self, xy: torch.Tensor, sigma: float = 0.0) -> torch.Tensor:
+        """Micro-texture field at ``xy``, optionally spatially filtered by a sensing aperture of width ``sigma``."""
+        return self._field(xy, self.texture_k, self.texture_phase, sigma)
 
     def undulation(self, xy: torch.Tensor) -> torch.Tensor:
         return self._field(xy, self.undulation_k, self.undulation_phase)

@@ -181,6 +181,22 @@ set (`runs/v3/seed0/`). Test acc (training episodes):
 * **Caveat:** at full data every model's best checkpoint was the last evaluation (~3,400 steps), so all were still
   improving. A 10,000-step budget check is queued, then seeds 1–2.
 
+**Texture-reliance test (2026-10-08).** Protocol v2, 600-episode sets, 420 training episodes, seed 0, 90-episode test
+set (±3.5 points). `mjlab_terrain_600_notex` (texture amplitude 0) vs `mjlab_terrain_600_dc`:
+
+| model | with texture | no texture |
+|---|---|---|
+| hierarchical_meanmax | 0.887 | 0.824 (−6) |
+| flat_gru | 0.874 | 0.876 (±0) |
+| no_interaction | 0.752 | 0.817 (+6) |
+
+Suggestive, not conclusive: the structured model seems to exploit the micro-texture vibration cue and the flat
+model does not. A real 2 mm skin with 1 cm taxels would mostly filter that cue out, so part of the structured
+models' low-data advantage could be a simulator artifact.
+* → `ContactModelConfig.texture_filter` (spatial low-pass, σ ≈ 3.5 mm) and a paired, physically filtered dataset
+  `mjlab_terrain_2400_skin`.
+* The main study is re-run on it (queue_v3d).
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
@@ -240,9 +256,12 @@ the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac dat
 3. (done) Literature review → `docs/references/sensor_terrain_calibration.md`.
 
 4. `runs/logs/queue_v2c.sh`: collect `datasets/mjlab_terrain_2400` (seed 1; `collect_mjlab_large.yaml`).
-5. Main-study seed 0 done (see findings). Now `runs/logs/queue_v3c.sh`: texture test (`runs/v2/notex/`) →
-   10k-step budget check at full data (`configs/experiments/budget_v3_mjlab.yaml` → `runs/v3/budget10k/`) →
-   v3 seeds 1, 2 (`runs/v3/seed12/`).
+5. Main-study seed 0 and the texture test are done (see findings). Running: 10k-step budget check at full data
+   (`configs/experiments/budget_v3_mjlab.yaml` → `runs/v3/budget10k/`). Then `runs/logs/queue_v3d.sh`:
+   * collect `datasets/mjlab_terrain_2400_skin` (`collect_mjlab_large_skin.yaml`, texture_filter 3.5 mm);
+   * main study on it, seed 0 → `runs/v3_skin/seed0/`, then seeds 1, 2 → `runs/v3_skin/seed12/`;
+   * main study seeds 1, 2 on the unfiltered data → `runs/v3/seed12/`.
+   Roughly 5 h per seed batch.
    (Original plan, kept for reference) `runs/logs/queue_v3b.sh`: **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
    0.025/0.1/0.25/1.0 of 1,680 training episodes. Structure spectrum with shared stage 1 and mean+max head:
    flat_gru → attn_sid (transformer + sensor IDs, no geometry) → attn_dist (attention + distance prior) →
