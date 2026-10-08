@@ -1,0 +1,13 @@
+# Sensor-robustness suite for models trained on configs/sensors/fsr.yaml (scripts/analysis/robustness.py): each
+# perturbation is merged into the base sensor config, single factors first, then all together (= fsr_degraded.yaml).
+# Values sit at the pessimistic end of docs/references/sensor_terrain_calibration.md (FSR unloading 20-100 ms,
+# creep, taxel-to-taxel gain spread, noise); a proxy for sensor behaviour the simulator-trained model never saw.
+base: configs/sensors/fsr.yaml
+perturbations:
+  nominal: {}
+  hysteresis: {tactile: {params: {tau_load: 0.004, tau_unload: 0.08}}}
+  creep: {tactile: {params: {creep_frac: 0.15, creep_tau: 1.0}}}
+  gain_spread: {tactile: {params: {gain_spread: 0.35}}}
+  noise: {tactile: {params: {noise_std: 0.01}}}
+  all: {tactile: {params: {tau_load: 0.004, tau_unload: 0.08, creep_frac: 0.15, creep_tau: 1.0, gain_spread: 0.35,
+                           noise_std: 0.01}}}
