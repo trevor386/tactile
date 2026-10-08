@@ -150,6 +150,8 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
 ## Task queue (current plan; keep statuses current)
 
 **Running now (GPU queue, sequential; logs in `runs/logs/`):**
+First v2 result: hierarchical (cluster head), mjlab data, full data → **test acc 0.880** (NLL 0.33). Well above
+the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac data gave 0.628.
 1. `runs/logs/queue_v2.sh`:
    * protocol v2, all inputs, full data, seed 0 (`configs/experiments/protocol_v2_mjlab.yaml` → `runs/v2/all/`):
      hierarchical (cluster head), hierarchical_meanmax, hierarchical_meanmax_sid, no_interaction, flat_gru.
@@ -157,8 +159,7 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
      joint+imu only → `runs/v2/joint_imu/`.
    * Results: each `runs/v2/*/summary.md` / `results.csv`; per-run `log.jsonl` and `result.json` (with confusion).
 2. `runs/logs/queue_v2b.sh` (starts after 1): ideal skin with shear, all inputs → `runs/v2/ideal_all/`.
-3. Background literature agent → `docs/references/sensor_terrain_calibration.md` (sensor hysteresis and
-   ice-friction parameter ranges).
+3. (done) Literature review → `docs/references/sensor_terrain_calibration.md`.
 
 **Next, when the results are in:**
 - [ ] Analyse v2: does any model beat the friction-only ceiling (0.795)? Hierarchical vs flat after adequate
@@ -171,6 +172,16 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
       full attention + distance bias → local continuous-kernel graph → no interaction.
 - [ ] Robustness proxy for sim-to-real: evaluate trained models with `scripts/evaluate.py --sensors
       configs/sensors/fsr_degraded.yaml` (stronger hysteresis/creep/gain spread) and on Isaac data (cross-sim).
+
+**Sim realism (from `docs/references/sensor_terrain_calibration.md`, literature review 2026-10-08):**
+- [ ] Texture reliance test: re-collect mjlab data with texture amplitude 0 (2 min) and retrain the key models. If
+      accuracy drops a lot, the models exploit a cue a real 2 mm skin with 1 cm taxels would mostly filter out.
+- [ ] Contact model: spatial skin filter (average texture over the taxel area, smoothing with skin depth), and pressure
+      levels consistent with snow (1–2 kPa) vs ice (~10 kPa).
+- [ ] Sensor models: FSR `tau_unload` 20–100 ms per taxel, rate-independent hysteresis (7–17 % full scale),
+      log-time drift; capacitive `visco_frac` 0.05–0.12.
+- [ ] Terrain: ice friction is strongly temperature dependent (0.05–0.15 near 0 °C, 0.4–0.9 at −10 to −25 °C);
+      fresh-snow sinkage 3–15 mm; static/dynamic ratio 1.1–1.5. The current boxes cover only near-melting ice.
 
 **Later / open:**
 - [ ] TBPTT fails with 6 chunks per sequence (2 chunks work): test 3/4-chunk variants and more distinct sequences per
