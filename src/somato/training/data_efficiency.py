@@ -63,6 +63,8 @@ def run_data_efficiency(study_path: str | Path, overrides: dict[str, Any] | None
         study = deep_update(study, overrides)
     base = resolve_config_refs(ExperimentConfig.from_yaml(study["base"], study.get("base_overrides")))
     store = EpisodeStore(base.dataset)
+    if base.input_groups:  # match widths for the sensor groups actually fed to the models
+        store = store.select_groups(base.input_groups)
     models = {n: load_yaml(m) if isinstance(m, str) else m for n, m in study["models"].items()}
     if study.get("match_params", False):
         models = match_widths(models, study.get("reference_model", next(iter(models))), store, base.sensors,

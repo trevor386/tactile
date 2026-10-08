@@ -52,6 +52,11 @@ class ExperimentConfig:
     def from_yaml(cls, path: str | Path, overrides: dict[str, Any] | None = None) -> ExperimentConfig:
         d = load_yaml(path)
         if overrides:
+            # A nested override of a section given as a YAML path (e.g. ``model.heads.terrain.pool``) merges
+            # into that file's contents instead of replacing the path.
+            for k, v in overrides.items():
+                if isinstance(v, dict) and isinstance(d.get(k), str):
+                    d[k] = load_yaml(d[k])
             d = deep_update(d, overrides)
         return from_dict(cls, d)
 

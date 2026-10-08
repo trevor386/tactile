@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import json
 import math
@@ -32,6 +33,10 @@ class TrainConfig:
     # and evaluation averages the metrics over all chunk ends. Training samples longer than the chunk then teach
     # the model to predict from the long state histories of streaming deployment. 0 = independent windows.
     tbptt_chunk: int = 0
+    # Lower bound on optimizer steps: epochs are raised to reach it, so small training sets (learning curves) still
+    # get enough updates to converge (combine with ``patience`` for early stopping). 0 = exactly ``epochs``.
+    min_steps: int = 0
+    amp: str = "none"  # "bf16": autocast forward/loss in bfloat16 on CUDA (neighbor search stays float32)
     device: str = "auto"
     num_workers: int = 0
     seed: int = 0
@@ -94,6 +99,13 @@ class Trainer:
             parts[f"{t.name}/loss"] = float(loss.detach())
         return total, parts
 
+    def _autocast(self):
+        if self.cfg.amp == "bf16":
+            return torch.autocast(device_type=self.device.type, dtype=torch.bfloat16)
+        if self.cfg.amp != "none":
+            raise ValueError(f"Unknown amp mode {self.cfg.amp!r} (none | bf16)")
+        return contextlib.nullcontext()
+
     def _chunks(self, batch):
         """Consecutive ``tbptt_chunk``-step pieces of ``batch`` (the whole batch when chunking is off)."""
         c, L = self.cfg.tbptt_chunk, batch.num_steps
@@ -109,7 +121,8 @@ class Trainer:
         steps_per_epoch = len(loader) if not cfg.max_steps_per_epoch else min(len(loader), cfg.max_steps_per_epoch)
         if cfg.tbptt_chunk > 0:  # one optimizer step per chunk
             steps_per_epoch *= max(1, math.ceil(getattr(train_ds, "window", cfg.tbptt_chunk) / cfg.tbptt_chunk))
-        total_steps = max(1, cfg.epochs * steps_per_epoch)
+        epochs = max(cfg.epochs, math.ceil(cfg.min_steps / max(1, steps_per_epoch)))
+        total_steps = max(1, epochs * steps_per_epoch)
         warmup = max(1, int(cfg.warmup_epochs * steps_per_epoch))
         opt = torch.optim.AdamW(self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
         sched = torch.optim.lr_scheduler.LambdaLR(
@@ -117,7 +130,7 @@ class Trainer:
         )
         best_score, best_state, best_epoch, bad_epochs = -math.inf, None, -1, 0
         step = 0
-        for epoch in range(cfg.epochs):
+        for epoch in range(epochs):
             self.model.train()
             t0, running, n = time.time(), {}, 0
             for i, sample in enumerate(loader):
@@ -125,18 +138,20 @@ class Trainer:
                     break
                 state = None
                 for chunk in self._chunks(self.preparer(sample, train=True)):
-                    outputs, state = self.model(chunk, state, output_steps=cfg.output_steps)
-                    loss, parts = self._loss(outputs, chunk)
+                    with self._autocast():
+                        outputs, state = self.model(chunk, state, output_steps=cfg.output_steps)
+                        loss, parts = self._loss(outputs, chunk)
                     opt.zero_grad(set_to_none=True)
                     loss.backward()
-                    if cfg.grad_clip > 0:
-                        nn.utils.clip_grad_norm_(self.model.parameters(), cfg.grad_clip)
+                    # pre-clip gradient norm (logged; clipping only when grad_clip > 0)
+                    gnorm = nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                     cfg.grad_clip if cfg.grad_clip > 0 else float("inf"))
                     opt.step()
                     sched.step()
                     state = detach_state(state)
                     step += 1
                     n += 1
-                    for k, v in parts.items():
+                    for k, v in {**parts, "grad_norm": float(gnorm)}.items():
                         running[k] = running.get(k, 0.0) + v
                     if cfg.log_every and step % cfg.log_every == 0:
                         print(f"  step {step}: " + ", ".join(f"{k}={v:.4f}" for k, v in parts.items()))
@@ -167,8 +182,10 @@ class Trainer:
         for sample in self._loader(ds, shuffle=False):
             state = None
             for chunk in self._chunks(self.preparer(sample, train=False)):
-                outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
-                loss, _ = self._loss(outputs, chunk)
+                with self._autocast():
+                    outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
+                    loss, _ = self._loss(outputs, chunk)
+                outputs = {k: v.float() for k, v in outputs.items()}
                 B = chunk.batch_size
                 loss_sum += float(loss) * B
                 count += B
@@ -186,7 +203,8 @@ class Trainer:
         for sample in self._loader(ds, shuffle=False):
             state = None
             for chunk in self._chunks(self.preparer(sample, train=False)):
-                outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
+                with self._autocast():
+                    outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
                 pred = task.predict(outputs).cpu()
                 y = chunk.labels[task.label].long().cpu()
                 cm.index_put_((y, pred), torch.ones_like(y), accumulate=True)
@@ -194,8 +212,8 @@ class Trainer:
 
     def _log(self, record: dict[str, Any]) -> None:
         keys = [k for k in record if k.startswith("val/") and ("acc" in k or "mae" in k or k == "val/loss")]
-        msg = f"epoch {record['epoch']:3d} | train loss " + ", ".join(
-            f"{v:.4f}" for k, v in record.items() if k.startswith("train/"))
+        msg = f"epoch {record['epoch']:3d} | train " + ", ".join(
+            f"{k[6:]}={v:.4f}" for k, v in record.items() if k.startswith("train/"))
         if keys:
             msg += " | " + ", ".join(f"{k}={record[k]:.4f}" for k in keys)
         print(msg)

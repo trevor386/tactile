@@ -49,6 +49,33 @@ open problems, and the task queue. The design docs are `architecture.md`, `isaac
 * The TBPTT model (`runs/isaac600_hier_tbptt`) is trained but not yet evaluated, because the logs were
   lost in a reboot.
 
+**Training adequacy (2026-10-08).** The data-efficiency comparison above is confounded by training budget.
+* The study trained a fixed 20 epochs, so small fractions also got proportionally fewer optimizer steps.
+* Learning curves on Isaac data (train loss start → epoch 10 → epoch 20):
+  * hierarchical, 100 %: 1.61 → 1.06 → 0.71, still improving (best val at the last epoch).
+  * hierarchical, 25 %: 1.62 → 1.34 → 1.28, barely learning.
+  * flat_gru: train loss 0.02, memorized and then overfit.
+* Cause: the **cluster-attention head starts on a loss plateau**. Loss stays at ln 5 for ~150–200
+  optimizer steps at lr 1e-3; lr 3e-3 never escapes in 300 steps; lr 3e-4 behaves like 1e-3. Val acc
+  after 300 steps (mjlab data):
+
+  | variant | val acc |
+  |---|---|
+  | cluster-attention head | 0.38 |
+  | same backbone, mean+max head | 0.54 (no plateau) |
+  | no_interaction | 0.49 |
+  | flat_gru | 0.76 |
+
+  Stages 1–2 learn fine; the head's optimization is the bottleneck.
+* The TBPTT run (`isaac600_hier_tbptt`, cluster-attention head) never left the plateau in 3,360 steps
+  and stayed at chance.
+* Fix for comparisons: `train.min_steps` (≥ ~3,000 updates at every fraction) + early stopping, with
+  the head choice as an explicit factor.
+
+**Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
+input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
+are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
+
 ## What is (not) modelled: hysteresis and contact dynamics
 
 * **Simulators.** Both resolve each link's contact as rigid (PhysX) or soft-constraint (MuJoCo)
@@ -91,8 +118,12 @@ open problems, and the task queue. The design docs are `architecture.md`, `isaac
 
 ## Task queue
 
-- [ ] Modality ablation on mjlab data: flat_gru / hierarchical / no_interaction × {all, tactile, joint+imu}.
-- [ ] Training adequacy: hierarchical and flat at 20 vs 60 epochs (early stopping); 3 seeds at full data.
+- [x] Find why the hierarchical model learns slowly → cluster-attention head plateau (see findings).
+- [ ] Locate the plateau inside the head (attention blocks vs. token norm/pooling); remedy (e.g. identity-init
+      residual branches) if it is a pure initialization issue.
+- [ ] Modality ablation on mjlab data with protocol v2 (min_steps, early stopping): flat_gru / hierarchical
+      (both heads) / no_interaction × {all, tactile, joint+imu}; hierarchical + sensor_id_embedding.
+- [ ] 3 seeds at full data with protocol v2.
 - [ ] Inspect the hierarchical model's use of joint/IMU nodes (head pooling, normalizer statistics of
       zero-inflated FSR readings).
 - [ ] Evaluate the TBPTT model (windows 25/75/150) and sliding-window inference; decide on a default.

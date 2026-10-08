@@ -1,0 +1,16 @@
+# Sanity / ablation runs on the primary (mjlab) dataset, through the data-efficiency runner so that the baselines
+# are width-matched to the hierarchical model. Modality ablations override base_overrides.input_groups, e.g.
+#   python scripts/data_efficiency.py --config configs/experiments/ablation_mjlab.yaml \
+#       --set base_overrides.input_groups=[tactile] output_dir=runs/ablation_mjlab/tactile
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_600_dc
+output_dir: runs/ablation_mjlab/all
+fractions: [1.0]
+seeds: [0]
+match_params: true
+reference_model: hierarchical
+models:
+  hierarchical: configs/models/hierarchical.yaml
+  no_interaction: configs/models/no_interaction.yaml
+  flat_gru: configs/models/flat_gru.yaml

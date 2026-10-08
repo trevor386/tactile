@@ -206,3 +206,25 @@ def test_data_efficiency_study(tmp_path, dataset_dir):
     params = {r["model"]: r["params"] for r in results}
     assert abs(params["flat"] - params["hier"]) / params["hier"] < 0.15
     assert (tmp_path / "out" / "summary.md").exists() and (tmp_path / "out" / "results.csv").exists()
+
+
+def test_nested_override_merges_into_yaml_section(tmp_path):
+    from somato.training.experiment import resolve_config_refs
+    from somato.utils.config import save_yaml
+
+    save_yaml({"dim": 32, "heads": {"terrain": {"pool": "cluster_attention", "hidden": 64}}}, tmp_path / "m.yaml")
+    save_yaml({"model": str(tmp_path / "m.yaml")}, tmp_path / "exp.yaml")
+    cfg = resolve_config_refs(ExperimentConfig.from_yaml(tmp_path / "exp.yaml",
+                                                         {"model": {"heads": {"terrain": {"pool": "meanmax"}}}}))
+    assert cfg.model["dim"] == 32 and cfg.model["heads"]["terrain"] == {"pool": "meanmax", "hidden": 64}
+
+
+def test_min_steps_and_bf16(tmp_path, dataset_dir, store):
+    cfg = ExperimentConfig(name="steps", dataset=str(dataset_dir), output_dir=str(tmp_path), model=TINY_MODEL,
+                           sensors=IDEAL, train=TrainConfig(epochs=1, batch_size=4, output_steps=2, min_steps=6,
+                                                            amp="bf16"),
+                           window=6, stride=6, split=(1 / 3, 1 / 3, 1 / 3), save_checkpoint=False)
+    result = run_experiment(cfg, store, verbose=False)
+    log = [json.loads(line) for line in (tmp_path / "steps" / "log.jsonl").read_text().splitlines()]
+    assert len(log) > 1  # epochs raised to reach min_steps
+    assert 0.0 <= result["test/terrain/acc_last"] <= 1.0

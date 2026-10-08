@@ -1,0 +1,9 @@
+# FSR skin with stronger non-idealities than configs/sensors/fsr.yaml, for robustness tests
+# (scripts/evaluate.py --sensors): a model trained on fsr.yaml is evaluated on a sensor that behaves worse, as a
+# real skin may (slower unloading hysteresis, more creep, larger taxel-to-taxel gain spread, more noise).
+tactile:
+  model: fsr
+  params: {area: 1.0e-4, tau_load: 0.004, tau_unload: 0.08, creep_frac: 0.15, creep_tau: 1.0, gain_spread: 0.35,
+           noise_std: 0.01}
+joint: {model: motor}
+imu: {model: mems_imu}

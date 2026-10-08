@@ -18,7 +18,7 @@ from somato.training.experiment import ExperimentConfig, build_suite, load_train
 from somato.training.prepare import BatchPreparer
 from somato.training.tasks import ClassificationTask, build_tasks
 from somato.training.trainer import Trainer, resolve_device
-from somato.utils.config import from_dict
+from somato.utils.config import from_dict, load_yaml
 
 
 def main():
@@ -31,6 +31,9 @@ def main():
                         help="latent steps per evaluation window (default: the training window); a longer window "
                              "tests how the recurrent state generalizes beyond the training horizon")
     parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--sensors", default=None,
+                        help="sensor-model YAML to evaluate with instead of the training one (robustness to sensor "
+                             "behaviour the model was not trained on, e.g. stronger hysteresis)")
     parser.add_argument("--out", default=None, help="optional JSON file for the results")
     args = parser.parse_args()
 
@@ -50,7 +53,10 @@ def main():
     ids = torch.arange(len(labels)) if args.split == "all" else stratified_split(labels, tuple(cfg.split),
                                                                                   cfg.split_seed)[2]
     ds = WindowDataset(store, ids, cfg.window, cfg.eval_stride)
-    suite = build_suite(store, ckpt["sensors"])
+    sensors = load_yaml(args.sensors) if args.sensors else ckpt["sensors"]
+    suite = build_suite(store, sensors)
+    if any(suite.models[g].num_outputs != ckpt["groups"][g]["channels"] for g in ckpt["groups"] if g in suite.models):
+        raise ValueError("--sensors must produce the same reading channels as the training sensors")
     info = LayoutInfo.from_layout(store.layout, store.desc, ckpt["model_cfg"].get("cluster_mode", "body"),
                                   ckpt["model_cfg"].get("num_clusters"))
     tasks = build_tasks(cfg.tasks)
