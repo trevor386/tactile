@@ -143,6 +143,22 @@ the key question for the modality ablation.
 * The flat model fuses proprioception well (0.752 → 0.874 with all inputs), so at full data it nearly closes the
   gap. Data efficiency is the open question for the v3 learning curves.
 
+**Sensor technology: ideal skin with shear vs FSR (protocol v2, mjlab, full data, seed 0, 2026-10-08).**
+
+| model | ideal + shear | FSR (normal only) | Δ |
+|---|---|---|---|
+| hierarchical_meanmax | **0.954** (NLL 0.13) | 0.887 | +6.7 |
+| flat_gru | 0.939 (NLL 0.28) | 0.874 | +6.5 |
+| no_interaction | 0.930 (NLL 0.20) | 0.752 | **+17.8** |
+
+**The value of spatial interaction depends on what each sensor measures.**
+* With shear, each taxel reads friction locally (shear/normal), so per-sensor processing alone reaches 0.93.
+* With FSR (normal only), single taxels are ambiguous. Friction and sinkage must be inferred from the spatial
+  pressure pattern, and stage 2 is worth 13 points.
+
+So the appropriate inductive bias is not fixed: it depends on the sensor physics. This matters for sim-to-real,
+because real skins differ in what each taxel resolves.
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
