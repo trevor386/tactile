@@ -27,12 +27,20 @@ def main():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--split", choices=["test", "all"], default="test")
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--window", type=int, default=None,
+                        help="latent steps per evaluation window (default: the training window); a longer window "
+                             "tests how the recurrent state generalizes beyond the training horizon")
+    parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--out", default=None, help="optional JSON file for the results")
     args = parser.parse_args()
 
     device = resolve_device(args.device)
     model, ckpt = load_trained_model(args.checkpoint, map_location=device)
     cfg = from_dict(ExperimentConfig, ckpt["experiment"])
+    if args.window:
+        cfg.window = cfg.eval_stride = args.window
+    if args.batch_size:
+        cfg.train.batch_size = args.batch_size
     store = EpisodeStore(args.dataset)
     names = store.meta.terrain_names
     if names != ckpt["terrain_names"]:
@@ -49,7 +57,8 @@ def main():
     metrics = trainer.evaluate(ds)
     cls = [t for t in tasks if isinstance(t, ClassificationTask)]
     confusion = trainer.confusion_matrix(ds, cls[0], len(names)).tolist() if cls else None
-    print(f"{args.checkpoint} on {args.dataset} ({args.split}: {len(ids)} episodes, {len(ds)} windows)")
+    print(f"{args.checkpoint} on {args.dataset} ({args.split}: {len(ids)} episodes, {len(ds)} windows of "
+          f"{cfg.window} steps)")
     print("  " + ", ".join(f"{k}={v:.4f}" for k, v in metrics.items()))
     if confusion:
         width = max(len(n) for n in names)
