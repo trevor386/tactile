@@ -110,7 +110,7 @@ the latest step. `per_body` heads give per-link outputs (e.g. slip).
 
 ```
 SimBackend (physics only) ──RawSimState──► StimulusPipeline ──stimuli──► SensorSuite ──readings──► model
- mock / Isaac Lab                           taxel contact model,            FSR / capacitive /
+ mock / Isaac Lab / mjlab                   taxel contact model,            FSR / capacitive /
                                             IMU specific force, joints      MEMS / motor models
 ```
 
@@ -158,5 +158,9 @@ store readings instead (`data_kind: readings`).
   lift this.
 * Self-supervised objectives (masked-sensor prediction, reconstruction) are not implemented yet. The
   model already returns stage-2 features (`return_features=True`), and `node_mask` provides masking.
-* The Isaac Lab backend was written against the Isaac Lab 2.3 API and is exercised in CI against a
-  fake API, but not yet on Isaac Sim. Run `scripts/isaac/validate_isaac.py` first (see `isaac_sim.md`).
+* The Isaac Lab backend is verified on Isaac Lab 2.3.2 / Isaac Sim 5.1 (see `isaac_sim.md`) and is
+  exercised in CI against a fake API. The mjlab (MuJoCo-Warp) backend runs the same robot and checks for
+  a PhysX vs. MuJoCo contact comparison (see `mjlab.md`). Run the validation script after any change.
+* Sensor streams are sampled from the physics rate with integrate-and-dump averaging
+  (`RateConfig.anti_alias`). Point sampling aliased PhysX's step-to-step contact chatter into the IMU and
+  tactile channels.

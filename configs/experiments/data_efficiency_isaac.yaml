@@ -1,0 +1,16 @@
+# Phase 1 criterion study on Isaac Sim data (600 episodes from collect_isaac.yaml), reduced to fit one
+# GPU evening: 3 models x 4 fractions x 1 seed (~1.7 h on an RTX 3060 Ti; the hierarchical model takes
+# ~90 s per epoch on the full training split).
+#   python scripts/data_efficiency.py --config configs/experiments/data_efficiency_isaac.yaml
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/isaac_terrain_600
+output_dir: runs/data_efficiency_isaac
+fractions: [0.1, 0.25, 0.5, 1.0]
+seeds: [0]
+match_params: true          # scale baseline widths to the hierarchical model's parameter count
+reference_model: hierarchical
+models:
+  hierarchical: configs/models/hierarchical.yaml
+  no_interaction: configs/models/no_interaction.yaml
+  flat_gru: configs/models/flat_gru.yaml

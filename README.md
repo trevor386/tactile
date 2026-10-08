@@ -2,8 +2,8 @@
 
 PyTorch code for a hierarchical encoder of dense tactile, IMU and joint (motor) sensing, built for
 reactive locomotion on icy terrain. It includes simulator integration (Isaac Lab on Isaac Sim 5.x,
-plus a lightweight CPU mock) and the training and evaluation tooling for the Phase 1 data-efficiency
-study.
+MuJoCo-Warp through mjlab, plus a lightweight CPU mock) and the training and evaluation tooling for the
+Phase 1 data-efficiency study.
 
 ```
 sensor histories ──► Stage 1: temporal ──► Stage 2: geometric ──► Stage 3: task head ──► terrain class,
@@ -58,6 +58,15 @@ python scripts/train.py --set dataset=datasets/isaac_terrain
 python scripts/isaac/online_demo.py --checkpoint runs/terrain_hierarchical/model.pt --headless
 ```
 
+The same robot, gait and terrains in MuJoCo-Warp (mjlab, separate Python 3.12 env; see
+[docs/mjlab.md](docs/mjlab.md)), and an animation of any collected dataset:
+
+```bash
+python scripts/mjlab/validate_mjlab.py
+python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab.yaml
+python scripts/render_episodes.py datasets/mjlab_terrain --out outputs/mjlab_snake.gif
+```
+
 ## What is swappable, and where
 
 | To change... | Edit | Code |
@@ -66,7 +75,7 @@ python scripts/isaac/online_demo.py --checkpoint runs/terrain_hierarchical/model
 | Robot and sensor geometry | `configs/robots/*.yaml` (snake generator or any URDF + placement generators) | `somato/robots/`, `somato/geometry/generators.py` |
 | Stage 1 / 2 / 3 variants | `configs/models/*.yaml` | registries in `somato/models/` |
 | Terrain classes | `configs/terrains/ice_forms.yaml` | `somato/sim/terrain.py` |
-| Simulator | implement `SimBackend` | `somato/sim/backend.py` (mock, Isaac Lab) |
+| Simulator | implement `SimBackend` | `somato/sim/backend.py` (mock, Isaac Lab, mjlab) |
 | Data source at runtime | sim, replay or hardware | `somato/sources/` (`HardwareSource` template) |
 
 Datasets store **ideal stimuli** (pressure/shear per taxel, true joint state, specific force). The

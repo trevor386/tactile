@@ -4,14 +4,40 @@ Target: **Isaac Lab 2.3.x on Isaac Sim 5.x**. The backend uses the Isaac Lab API
 `InteractiveScene`, `ArticulationCfg` from a URDF, `ContactSensorCfg` with `track_friction_forces` /
 `track_contact_points` (added in 2.3), `ImuCfg`, and the PhysX material tensor API.
 
+**Verified** on Isaac Lab **2.3.2** + Isaac Sim **5.1.0** (pip), Python 3.11, torch 2.7.0+cu128, Ubuntu 24.04,
+RTX 3060 Ti (8 GB), driver 595.71, headless: all 14 validation checks pass, data collection, training
+and the online demo run. Isaac Lab 2.3 does **not** support Isaac Sim 6.x (that needs Isaac Lab 3.0,
+whose API differs: warp arrays, XYZW quaternions, a new URDF importer).
+
 ## Setup
 
+A separate conda env (Isaac Sim 5.1 needs Python 3.11):
+
 ```bash
-# inside the Isaac Lab python environment (e.g. ./isaaclab.sh -p, or the conda env Isaac Lab created)
-cd tactile
-pip install -e .
-python scripts/isaac/validate_isaac.py --headless
+conda create -n isaaclab23 python=3.11 -y && conda activate isaaclab23
+pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com
+git clone --branch v2.3.2 --depth 1 https://github.com/isaac-sim/IsaacLab.git ~/IsaacLab
+cd ~/IsaacLab && ./isaaclab.sh -i none
+# flatdict (an Isaac Lab dependency) builds with pkg_resources, which setuptools >= 81 removed; if
+# `import isaaclab` fails, build it against an older setuptools and install the core package again:
+pip install "setuptools<81" && pip install --no-build-isolation flatdict==4.0.1 && pip install -e source/isaaclab
+cd ~/tactile && pip install -e ".[dev]"
+python -u scripts/isaac/validate_isaac.py --headless
 ```
+
+Practical notes:
+
+* Accept the Omniverse EULA once (interactive prompt) or set `OMNI_KIT_ACCEPT_EULA=YES`.
+* If a ROS distribution is sourced in `~/.bashrc`, unset `PYTHONPATH` (and drop `/opt/ros` from
+  `LD_LIBRARY_PATH`) before running Isaac: ROS Jazzy's Python 3.12 packages leak into the 3.11 env.
+* Run scripts with `python -u`: `SimulationApp.close()` ends the process without flushing buffered
+  stdout. It also exits with status 0, so `validate_isaac.py` exits through `os._exit(code)` instead.
+* **Rendering (GUI or cameras) crashes on NVIDIA driver 595.x** (segfault in `librtx.scenedb.plugin`
+  0.5 s after "app ready", also for Isaac Lab's empty-scene tutorial). This is a known Isaac Sim 5.1
+  issue with the R590 driver branch; 5.1 is validated with the 580 production driver. Headless physics
+  is unaffected. Without a GUI, `scripts/render_episodes.py` animates collected episodes from the
+  stored body poses.
 
 ## How the scene is built (`somato/sim/isaaclab/scene.py`)
 
@@ -49,20 +75,58 @@ Positions are reported relative to each environment's origin.
 | `torque_increases_with_friction`, `shear_increases_with_friction` | per-env terrain materials not applied |
 | `friction_opposes_sliding` | sign of `friction_forces_w`; if it fails, set `isaac.friction_sign: -1.0` |
 
-**Not yet verified on Isaac Sim**, and the first things to check if anything fails:
+Results on Isaac Sim 5.1 (10 envs, `collect_isaac.yaml`):
 
-* link prim paths `{ENV_REGEX_NS}/Robot/<link_name>` (the importer's flat hierarchy);
-* the sign convention of `friction_forces_w` (exposed as `friction_sign`);
-* capsule replacement keeping link frames (`kinematic_consistency`);
-* physics stability of the snake at 1 kHz with the default PD gains (`stiffness`, `damping`).
+| check | value | criterion |
+|---|---|---|
+| `kinematic_consistency` | 5.5e-7 m | < 2 mm |
+| `taxel_rest_height` | -0.002 m | in [-0.005, 0.002] |
+| `tactile_force_conservation` | 0.070 | < 0.35 |
+| `normal_force_equals_weight` | 0.015 | < 0.1 |
+| `imu_gravity` / `imu_still` | 0.23 m/s² / 0.017 rad/s | < 0.5 / < 0.05 |
+| `joint_tracking` | 0.017 rad | < 0.05 |
+| `torque_increases_with_friction` / `shear_increases_with_friction` | Spearman 1.0 / 1.0 | > 0.5 |
+| `friction_opposes_sliding` | 0.999 | > 0.8 |
+
+What this verified about the integration:
+
+* Link prims are flat, `{ENV_REGEX_NS}/Robot/<link_name>` (rigid bodies with `PhysxContactReportAPI`),
+  and the ground collision prim is `/World/ground/terrain/GroundPlane/CollisionPlane`.
+* `friction_forces_w` is the force on the sensor body: `friction_sign: 1.0` is correct.
+* `replace_cylinders_with_capsules` keeps the URDF link frames; masses (0.25 kg/link) are imported
+  exactly; one collision shape per link (`get_material_properties()` is `[E, 16, 3]`).
+* Per-link filtered contact sensors (`contact_mode: per_body`, `track_friction_forces`,
+  `track_contact_points`) work on Isaac Lab 2.3.2. `contact_mode: net` was not exercised.
+
+Physics stability at 1 kHz: the snake does not blow up with the default PD gains, but with PhysX's
+8 position / 1 velocity solver iterations resting contacts **chatter every step** (normal force ±70 %,
+IMU acceleration ±20 m/s² alternating between consecutive steps). `IsaacSnakeConfig` therefore uses
+**16 / 4 iterations** (normal force within 4 % of the weight; ~5 % slower). PhysX `enable_stabilization`
+has no effect on it; 4 / 0 is much worse.
+
+Because physics-rate jitter would alias into sensor streams sampled below the physics rate,
+`SimRunner` averages stimuli over each sensor sample period (`rates.anti_alias: true`, default). Two
+checks were also corrected for dynamic simulators (thresholds unchanged): `joint_tracking` alternates
+the pose within each joint axis (a global ±0.25 alternation bends all pitch joints of the yaw/pitch
+snake the same way and lifts it off the ground), and the gait checks use the same gait in every env
+(with randomized gaits inertial torques dominate the friction dependence). The IMU checks average over
+the last latent step.
 
 ## Collect, train, deploy
 
 ```bash
-python scripts/isaac/collect_isaac.py --config configs/experiments/collect_isaac.yaml --headless
+python -u scripts/isaac/collect_isaac.py --config configs/experiments/collect_isaac.yaml --headless
 python scripts/train.py --config configs/experiments/terrain_mock.yaml --set dataset=datasets/isaac_terrain name=isaac_hier
-python scripts/isaac/online_demo.py --checkpoint runs/isaac_hier/model.pt --headless
+python -u scripts/isaac/online_demo.py --checkpoint runs/isaac_hier/model.pt --headless
+python scripts/render_episodes.py datasets/isaac_terrain --out outputs/isaac_snake.gif
 ```
+
+What the data looks like (64 episodes, 3 s each, sidewinding): the snake's centroid moves 1.1–1.5 m
+per episode (0.4–0.5 m/s); mean taxel pressure is ~300 Pa for every class (weight) while mean shear
+grows with friction (16 Pa on glare ice to 106 Pa on concrete). In-contact taxel pressure has a median
+of 1.3 kPa but peaks above 65 kPa (0.01 % of samples), beyond float16: such arrays are stored as float32.
+Joint velocity reaches the 8 rad/s `velocity_limit` in 0.2 % of samples and torque the 6 Nm effort limit
+in 1.5 %. The IMU has heavy-tailed impact spikes (|acc| median 11.6, p99 33, max ~700 m/s²).
 
 The default Isaac robot is `configs/robots/snake_3d.yaml` (yaw/pitch joints) with a **sidewinding**
 gait, because PhysX friction is isotropic and lateral undulation barely propels without anisotropic
@@ -70,6 +134,9 @@ friction. The mock simulator models scale anisotropy and uses lateral undulation
 
 ## Performance notes
 
+* Measured: 64 envs × 4 s of simulated time (4000 physics steps incl. warm-up) in 103 s, i.e. ~26 ms
+  per physics step, nearly independent of `num_envs` at this scale (per-step Python overhead of 16
+  contact sensors plus the stimulus pipeline dominates; the solver iterations cost ~5 %).
 * Cost is dominated by the number of environments × physics rate. Start with `num_envs: 64–256`.
 * `contact_mode: net` avoids one sensor per link (much cheaper for long robots).
 * The stimulus pipeline runs every physics step (IMU finite differences need it). Taxel stimuli are
