@@ -2,7 +2,8 @@
 
     python scripts/isaac/online_demo.py --checkpoint runs/terrain_hierarchical/model.pt --headless
 
-The model runs one latent step at a time (stage-1 recurrent state persists), exactly as on a robot.
+The model runs one latent step at a time (stage-1 recurrent state persists), exactly as on a robot. With
+``--window N`` it instead re-runs on the last N latent steps from a fresh state at every step (sliding window).
 """
 
 import argparse
@@ -16,6 +17,8 @@ parser.add_argument("--checkpoint", required=True)
 parser.add_argument("--config", default="configs/experiments/collect_isaac.yaml")
 parser.add_argument("--num_envs", type=int, default=10)
 parser.add_argument("--steps", type=int, default=250, help="latent steps to run")
+parser.add_argument("--window", type=int, default=None,
+                    help="sliding-window inference over the last N latent steps (default: pure streaming)")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -42,7 +45,7 @@ def main():
         print(f"warning: model classes {ckpt['terrain_names']} != simulator classes {catalog.names}")
     suite = SensorSuite.from_config(ckpt["sensors"], layout, cfg.rates.sensors)
     info = LayoutInfo.from_layout(layout, desc, ckpt["model_cfg"].get("cluster_mode", "body"))
-    online = OnlineEncoder(model, layout, info, suite, args.device)
+    online = OnlineEncoder(model, layout, info, suite, args.device, window=args.window)
     source = SimSource(runner, terrain_class=torch.arange(args.num_envs) % len(catalog))
     source.reset()
     correct = []

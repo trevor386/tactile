@@ -36,6 +36,10 @@ class ExperimentConfig:
     train: TrainConfig = field(default_factory=TrainConfig)
     augment: AugmentConfig = field(default_factory=AugmentConfig)
     window: int = 25  # latent steps per training window
+    # > 0: train on crops of this many latent steps with truncated BPTT in ``window``-step chunks (the recurrent
+    # state is carried across chunks, as in streaming deployment); validation and test then stream through
+    # sequences of the same length and average the metrics over all chunk ends. 0 = independent windows.
+    train_sequence: int = 0
     stride: int = 10
     eval_stride: int = 25
     split: tuple[float, float, float] = (0.7, 0.15, 0.15)
@@ -95,9 +99,16 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     if cfg.train_fraction < 1.0:
         train_ids = stratified_subset(train_ids, labels, cfg.train_fraction, seed=cfg.train.seed)
     gen = torch.Generator().manual_seed(cfg.train.seed)
-    train_ds = WindowDataset(store, train_ids, cfg.window, cfg.stride, random_offset=True, generator=gen)
-    val_ds = WindowDataset(store, val_ids, cfg.window, cfg.eval_stride)
-    test_ds = WindowDataset(store, test_ids, cfg.window, cfg.eval_stride)
+    if cfg.train_sequence > 0:
+        cfg.train.tbptt_chunk = cfg.window
+        seq = cfg.train_sequence
+        train_ds = WindowDataset(store, train_ids, seq, cfg.stride, random_offset=True, generator=gen)
+        val_ds = WindowDataset(store, val_ids, seq, seq)
+        test_ds = WindowDataset(store, test_ids, seq, seq)
+    else:
+        train_ds = WindowDataset(store, train_ids, cfg.window, cfg.stride, random_offset=True, generator=gen)
+        val_ds = WindowDataset(store, val_ids, cfg.window, cfg.eval_stride)
+        test_ds = WindowDataset(store, test_ids, cfg.window, cfg.eval_stride)
     for split_name, ds in (("train", train_ds), ("val", val_ds), ("test", test_ds)):
         if len(ds) == 0:
             raise ValueError(f"The {split_name} split has no windows (episodes per class too few for split "

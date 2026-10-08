@@ -56,6 +56,18 @@ class SomatoBatch:
             labels={k: v.to(device) for k, v in self.labels.items()},
         )
 
+    def steps(self, start: int, stop: int) -> SomatoBatch:
+        """Latent steps ``start:stop``; per-step labels (``[B, L, ...]``) are sliced too."""
+        L = self.num_steps
+        return SomatoBatch(
+            readings={k: v[:, start:stop] for k, v in self.readings.items()},
+            pos=self.pos[:, start:stop],
+            rot=self.rot[:, start:stop],
+            info=self.info,
+            node_mask=self.node_mask,
+            labels={k: v[:, start:stop] if v.dim() > 1 and v.shape[1] == L else v for k, v in self.labels.items()},
+        )
+
     def step(self, t: int) -> SomatoBatch:
         """The single latent step ``t`` (keeps the time dimension, ``L = 1``)."""
         return SomatoBatch(

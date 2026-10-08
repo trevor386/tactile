@@ -37,6 +37,7 @@ def main():
     device = resolve_device(args.device)
     model, ckpt = load_trained_model(args.checkpoint, map_location=device)
     cfg = from_dict(ExperimentConfig, ckpt["experiment"])
+    cfg.train.tbptt_chunk = 0  # always: fresh state, one pass over the window, metrics at its end
     if args.window:
         cfg.window = cfg.eval_stride = args.window
     if args.batch_size:

@@ -142,6 +142,42 @@ def test_online_encoder_matches_offline(store):
     assert len(online.latency_ms) == 12
 
 
+def test_online_encoder_sliding_window(store):
+    torch.manual_seed(0)
+    from somato.models import build_model
+
+    suite = build_suite(store, IDEAL)
+    model = build_model(TINY_MODEL, group_specs(store, suite)).eval()
+    info = LayoutInfo.from_layout(store.layout, store.desc)
+    W = 5
+    online = OnlineEncoder(model, store.layout, info, suite, window=W)
+    source = ReplaySource(store.episodes[:2], store.layout)
+    outs = []
+    while (frame := source.read()) is not None:
+        outs.append(online.step(frame)["terrain"])
+    prep = BatchPreparer(store.layout, info, suite, "cpu")
+    sample = torch.utils.data.default_collate([WindowDataset(store, [i], 12)[0] for i in range(2)])
+    full = prep(sample)  # sensor state persists over the whole episode, as online
+    with torch.no_grad():
+        for t in range(12):
+            offline, _ = model(full.steps(max(0, t + 1 - W), t + 1), output_steps=1)
+            assert torch.allclose(outs[t], offline["terrain"][:, -1], atol=1e-4)
+
+
+def test_truncated_bptt_experiment(tmp_path, dataset_dir, store):
+    # 12-step sequences in 4-step chunks: the backward pass of the 2nd and 3rd chunk only works if the carried
+    # state is detached at chunk boundaries.
+    cfg = ExperimentConfig(name="tbptt", dataset=str(dataset_dir), output_dir=str(tmp_path), model=TINY_MODEL,
+                           sensors=IDEAL, train=TrainConfig(epochs=2, batch_size=4, output_steps=2), window=4,
+                           stride=4, train_sequence=12, split=(1 / 3, 1 / 3, 1 / 3))
+    result = run_experiment(cfg, store, verbose=False)
+    assert 0.0 <= result["test/terrain/acc_last"] <= 1.0
+    log = [json.loads(line) for line in (tmp_path / "tbptt" / "log.jsonl").read_text().splitlines()]
+    assert len(log) == 2 and all("train/terrain/loss" in r for r in log)
+    _, ckpt = load_trained_model(tmp_path / "tbptt" / "model.pt")
+    assert ckpt["experiment"]["train"]["tbptt_chunk"] == 4 and ckpt["experiment"]["train_sequence"] == 12
+
+
 def test_data_efficiency_study(tmp_path, dataset_dir):
     from somato.training.data_efficiency import run_data_efficiency
     from somato.utils.config import save_yaml
