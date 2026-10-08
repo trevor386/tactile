@@ -1,0 +1,18 @@
+# Step-budget check at a quarter of the data (420 training episodes): v3 gave 3,078 steps (18 epochs) there and the
+# best checkpoints were at the last evaluations. Same protocol with 9,000 steps (~53 epochs); compare with
+# runs/v3/seed0 at frac 0.25 (flat 0.877, attn_dist 0.878, hierarchical 0.878) to decide whether protocol v4's
+# max(3000 steps, 15 epochs) budget is adequate below full data.
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_2400
+  train: {epochs: 1, min_steps: 9000, eval_every: 250, patience: 0, amp: bf16}
+output_dir: runs/v3/budget_frac025
+fractions: [0.25]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: hierarchical_meanmax
+models:
+  flat_gru: configs/models/flat_gru.yaml
+  attn_dist: configs/models/spectrum/attn_dist.yaml
+  hierarchical_meanmax: configs/models/hierarchical_meanmax.yaml

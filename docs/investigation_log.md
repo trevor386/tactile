@@ -200,6 +200,28 @@ set (`runs/v3/seed0/`). Test acc (training episodes):
     with enough data. That is exactly the cue suspected to be unrealistically visible (unfiltered texture). The
     skin-filtered rerun (`runs/v3_skin/`) tests whether the flat model's full-data edge survives realistic texture.
 
+**Step-budget check (2026-10-08, `runs/v3/budget10k/`).** Full data (1,680 episodes), seed 0, same protocol with
+10,245 steps (15 epochs) instead of ~3,400 (4.4 epochs):
+
+| model | test acc 3.4k → 10k | test NLL 10k | final train loss | best_step |
+|---|---|---|---|---|
+| flat_gru | 0.937 → 0.942 | 0.266 | 0.020 | 9,500 |
+| attn_dist | 0.895 → 0.936 | 0.172 | 0.111 | 10,000 |
+| hierarchical_meanmax | 0.902 → **0.946** | **0.144** | 0.085 | 10,245 (still improving) |
+
+* **The full-data "flat wins" crossover was a step-budget artifact.** Given enough optimizer steps, all three are
+  within ~1 point at full data (SE ≈ ±1.2 points on 360 test episodes). Hierarchical is nominally best and much better
+  calibrated.
+* Flat optimizes fastest per step: val 0.72 vs 0.57–0.61 at 500 steps. It also memorizes (train loss 0.02 vs val NLL
+  0.21). The structured models fit more slowly and generalize with a much smaller train/val gap (hierarchical 0.085 vs
+  0.116), so 3,000 steps understates them most on large training sets.
+* Per-class recall at 10k: the structured models catch up on glare, rough and packed (hierarchical 0.947 / 0.870 /
+  0.926 vs flat 0.924 / 0.868 / 0.944). The "fine friction/texture discrimination" edge of the flat model was also
+  budget. Remaining errors at full data are rough↔packed and glare↔rough confusions (overlapping friction boxes).
+* Cost per step, including validation: flat 0.062 s, hierarchical 0.28 s, attn_dist 0.39 s.
+* At 0.1 and 0.25, v3's best checkpoints were also at the last evaluations (2,750–3,078 steps). The cosine schedule
+  makes that partly expected, but adequacy there is unverified. → Protocol v4 (below).
+
 **Texture-reliance test (2026-10-08).** Protocol v2, 600-episode sets, 420 training episodes, seed 0, 90-episode test
 set (±3.5 points). `mjlab_terrain_600_notex` (texture amplitude 0) vs `mjlab_terrain_600_dc`:
 

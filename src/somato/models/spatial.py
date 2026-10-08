@@ -24,7 +24,7 @@ from torch import nn
 
 from somato.geometry.layout import LayoutInfo
 from somato.models.common import BiasedSelfAttention, FeedForward, FourierEncoding, gather_nodes, masked_softmax, mlp
-from somato.models.graph import EDGE_FEATURE_DIMS, NeighborGraph, edge_features, knn_graph
+from somato.models.graph import EDGE_FEATURE_DIMS, NeighborGraph, edge_features, knn_graph, pairwise_sq_distance
 from somato.utils.registry import Registry
 
 SPATIAL_LAYERS: Registry[nn.Module] = Registry("spatial layer")
@@ -186,8 +186,7 @@ class FullAttentionBlock(nn.Module):
     def forward(self, h, ctx):
         bias = None
         if self.distance_prior:
-            d = torch.cdist(ctx.pos, ctx.pos, compute_mode="donot_use_mm_for_euclid_dist")
-            d2 = d.pow(2) / ctx.length_scale**2  # [B, N, N]
+            d2 = pairwise_sq_distance(ctx.pos) / ctx.length_scale**2  # [B, N, N]
             bias = -nn.functional.softplus(self.raw_lambda)[None, :, None, None] * d2[:, None]
         return self.ffn(self.attn(h, bias, ctx.node_mask))
 
