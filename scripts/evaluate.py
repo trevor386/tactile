@@ -38,14 +38,17 @@ def main():
     args = parser.parse_args()
 
     device = resolve_device(args.device)
-    model, ckpt = load_trained_model(args.checkpoint, map_location=device)
+    store = EpisodeStore(args.dataset)
+    ckpt0 = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    info = LayoutInfo.from_layout(store.layout, store.desc, ckpt0["model_cfg"].get("cluster_mode", "body"),
+                                  ckpt0["model_cfg"].get("num_clusters"))
+    model, ckpt = load_trained_model(args.checkpoint, map_location=device, info=info)
     cfg = from_dict(ExperimentConfig, ckpt["experiment"])
     cfg.train.tbptt_chunk = 0  # always: fresh state, one pass over the window, metrics at its end
     if args.window:
         cfg.window = cfg.eval_stride = args.window
     if args.batch_size:
         cfg.train.batch_size = args.batch_size
-    store = EpisodeStore(args.dataset)
     names = store.meta.terrain_names
     if names != ckpt["terrain_names"]:
         raise ValueError(f"dataset classes {names} != model classes {ckpt['terrain_names']}")
@@ -57,8 +60,6 @@ def main():
     suite = build_suite(store, sensors)
     if any(suite.models[g].num_outputs != ckpt["groups"][g]["channels"] for g in ckpt["groups"] if g in suite.models):
         raise ValueError("--sensors must produce the same reading channels as the training sensors")
-    info = LayoutInfo.from_layout(store.layout, store.desc, ckpt["model_cfg"].get("cluster_mode", "body"),
-                                  ckpt["model_cfg"].get("num_clusters"))
     tasks = build_tasks(cfg.tasks)
     trainer = Trainer(model, tasks, BatchPreparer(store.layout, info, suite, device, cfg.augment), cfg.train)
     metrics = trainer.evaluate(ds)

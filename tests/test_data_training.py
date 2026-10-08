@@ -240,3 +240,15 @@ def test_eval_every_steps(tmp_path, dataset_dir, store):
     steps = [r["step"] for r in log]
     assert steps[:2] == [3, 6] and steps == sorted(steps) and "val/loss" in log[0]
     assert result["best_step"] in steps
+
+
+def test_flat_checkpoint_reload_with_layout(tmp_path, dataset_dir, store):
+    cfg = ExperimentConfig(name="flatck", dataset=str(dataset_dir), output_dir=str(tmp_path), sensors=IDEAL,
+                           model={"architecture": "flat_recurrent", "hidden": 16},
+                           train=TrainConfig(epochs=1, batch_size=4, output_steps=2), window=6, stride=6,
+                           split=(1 / 3, 1 / 3, 1 / 3))
+    run_experiment(cfg, store, verbose=False)
+    with pytest.raises(ValueError):
+        load_trained_model(tmp_path / "flatck" / "model.pt")  # layout-specific: needs the LayoutInfo
+    model, _ = load_trained_model(tmp_path / "flatck" / "model.pt", info=LayoutInfo.from_layout(store.layout, store.desc))
+    assert model.cfg.architecture == "flat_recurrent"

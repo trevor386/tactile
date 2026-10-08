@@ -78,7 +78,8 @@ def run_data_efficiency(study_path: str | Path, overrides: dict[str, Any] | None
             for name, mcfg in models.items():
                 cfg = copy.deepcopy(base)
                 cfg.model, cfg.train_fraction, cfg.train.seed = mcfg, float(frac), int(seed)
-                cfg.name, cfg.output_dir, cfg.save_checkpoint = f"{name}/frac{frac}_seed{seed}", str(out_dir), False
+                cfg.name, cfg.output_dir = f"{name}/frac{frac}_seed{seed}", str(out_dir)
+                cfg.save_checkpoint = bool(study.get("save_checkpoints", False))  # e.g. for robustness evaluation
                 r = run_experiment(cfg, store)
                 r.pop("confusion", None)
                 r["model"] = name

@@ -169,14 +169,17 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     return result
 
 
-def load_trained_model(path: str | Path, map_location="cpu"):
-    """Load a checkpoint written by :func:`run_experiment`. Returns ``(model, checkpoint_dict)``."""
+def load_trained_model(path: str | Path, map_location="cpu", info: LayoutInfo | None = None):
+    """Load a checkpoint written by :func:`run_experiment`. Returns ``(model, checkpoint_dict)``.
+
+    Layout-specific baselines (e.g. ``flat_recurrent``) also need the sensor layout ``info`` they were trained on.
+    """
     ckpt = torch.load(path, map_location=map_location, weights_only=False)
     groups = {k: GroupSpec(**v) for k, v in ckpt["groups"].items()}
     cfg = parse_model_config(ckpt["model_cfg"])
-    if cfg.architecture != "hierarchical":
-        raise ValueError("load_trained_model reconstructs layout-independent models only; rebuild baselines manually")
-    model = build_model(cfg, groups)
+    if cfg.architecture != "hierarchical" and info is None:
+        raise ValueError(f"'{cfg.architecture}' models are tied to a sensor layout: pass the LayoutInfo")
+    model = build_model(cfg, groups, info)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
     return model, ckpt
