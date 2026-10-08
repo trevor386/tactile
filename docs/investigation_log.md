@@ -72,6 +72,17 @@ open problems, and the task queue. The design docs are `architecture.md`, `isaac
 * Fix for comparisons: `train.min_steps` (≥ ~3,000 updates at every fraction) + early stopping, with
   the head choice as an explicit factor.
 
+**Plateau location and TBPTT (2026-10-08, 300–600-step screens on mjlab data).**
+* Head without attention blocks (`cluster_layers: 0`): escapes after ~100 steps, val 0.41 at 300 steps.
+  The attention blocks cause most of the delay, the token/LayerNorm path the rest.
+* TBPTT:
+  * 50-step crops (2 chunks) with the mean+max head learn well: val 0.68 (averaged over chunk ends) at
+    600 steps.
+  * 150-step sequences (6 chunks) stay at uniform prediction with *either* head. Open issue in the TBPTT
+    path. Differences: 14 distinct batches per epoch vs 145; 6 correlated consecutive updates per batch.
+    To test: 4 chunks, 3 chunks.
+* bf16 autocast: 1.3× faster per step with identical learning curves; used for protocol v2.
+
 **Initialization signal (`scripts/analysis/init_signal.py`).** Every group's features still depend on the
 input after stage 2: the per-sensor std across samples is 11–17 % of the feature RMS. Stage-1 features
 are dominated by a sample-independent component at init (85–95 %), which is typical for an untrained GRU.
@@ -124,6 +135,10 @@ are dominated by a sample-independent component at init (85–95 %), which is ty
 - [ ] Modality ablation on mjlab data with protocol v2 (min_steps, early stopping): flat_gru / hierarchical
       (both heads) / no_interaction × {all, tactile, joint+imu}; hierarchical + sensor_id_embedding.
 - [ ] 3 seeds at full data with protocol v2.
+- [ ] TBPTT with 6 chunks fails (see findings): test 3/4-chunk variants, and more distinct sequences per epoch.
+- [ ] Main experiment once v2 checks pass: learning curves (fractions × 3 seeds) along a spectrum of spatial
+      structure with stage 1 and the head fixed: flat vector → transformer over sensors with ID embeddings (no
+      geometry) → full attention + distance bias → local continuous-kernel graph → no interaction.
 - [ ] Inspect the hierarchical model's use of joint/IMU nodes (head pooling, normalizer statistics of
       zero-inflated FSR readings).
 - [ ] Evaluate the TBPTT model (windows 25/75/150) and sliding-window inference; decide on a default.

@@ -1,0 +1,16 @@
+# Protocol v2 modality ablation (set base_overrides.input_groups and output_dir with --set), e.g.
+#   python scripts/data_efficiency.py --config configs/experiments/protocol_v2_modality_mjlab.yaml \
+#       --set base_overrides.input_groups=[tactile] output_dir=runs/v2/tactile
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_600_dc
+  train: {epochs: 20, min_steps: 3000, patience: 8, amp: bf16}
+output_dir: runs/v2/modality
+fractions: [1.0]
+seeds: [0]
+match_params: true
+reference_model: hierarchical_meanmax
+models:
+  hierarchical_meanmax: configs/models/hierarchical_meanmax.yaml
+  no_interaction: configs/models/no_interaction.yaml
+  flat_gru: configs/models/flat_gru.yaml

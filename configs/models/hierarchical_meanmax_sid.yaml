@@ -1,0 +1,33 @@
+# hierarchical_meanmax + a learned absolute per-sensor embedding (layout-specific, like the flat baseline):
+# tests how much of the flat baseline's advantage comes from knowing which sensor is which.
+architecture: hierarchical
+dim: 64
+temporal:
+  type: conv_gru
+  latent_dim: 64
+  params:
+    hidden: 64
+    conv_channels: 32
+spatial:
+  type: continuous_conv
+  num_layers: 2
+  edge_features: rel_pos_local
+  length_scale: 0.05
+  graph:
+    k: 16
+    k_per_group:
+      tactile: 12
+      joint: 3
+      imu: 1
+    dynamic: true
+  params:
+    num_basis: 16
+    kernel_hidden: 64
+    aggregation: mean
+heads:
+  terrain:
+    type: global
+    pool: meanmax
+    hidden: 128
+cluster_mode: body
+sensor_id_embedding: 400

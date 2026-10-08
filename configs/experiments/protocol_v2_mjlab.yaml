@@ -1,0 +1,18 @@
+# Protocol v2 comparisons on the primary (mjlab) dataset: every model gets at least 3000 optimizer steps
+# (min_steps) with early stopping on validation accuracy, so slow starters and small data fractions are trained
+# to convergence. Baselines are width-matched to the hierarchical model.
+base: configs/experiments/terrain_mock.yaml
+base_overrides:
+  dataset: datasets/mjlab_terrain_600_dc
+  train: {epochs: 20, min_steps: 3000, patience: 8, amp: bf16}
+output_dir: runs/v2/all
+fractions: [1.0]
+seeds: [0]
+match_params: true
+reference_model: hierarchical
+models:
+  hierarchical: configs/models/hierarchical.yaml
+  hierarchical_meanmax: configs/models/hierarchical_meanmax.yaml
+  hierarchical_meanmax_sid: configs/models/hierarchical_meanmax_sid.yaml
+  no_interaction: configs/models/no_interaction.yaml
+  flat_gru: configs/models/flat_gru.yaml
