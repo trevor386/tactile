@@ -218,12 +218,15 @@ the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac dat
 3. (done) Literature review → `docs/references/sensor_terrain_calibration.md`.
 
 4. `runs/logs/queue_v2c.sh`: collect `datasets/mjlab_terrain_2400` (seed 1; `collect_mjlab_large.yaml`).
-5. `runs/logs/queue_v3.sh`: **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
+5. `runs/logs/queue_v3b.sh` (replaces queue_v3.sh, which was stopped while still waiting): **main study** `configs/experiments/curves_v3_mjlab.yaml`. Learning curves at fractions
    0.025/0.1/0.25/1.0 of 1,680 training episodes. Structure spectrum with shared stage 1 and mean+max head:
    flat_gru → attn_sid (transformer + sensor IDs, no geometry) → attn_dist (attention + distance prior) →
    hierarchical_meanmax (local continuous kernel) → no_interaction. Protocol v3: 3,000 steps for every run,
-   validation every 250 steps, best checkpoint. Seed 0 → `runs/v3/seed0/`, then seeds 1, 2 → `runs/v3/seed12/`.
-   About 4–5 h per seed batch.
+   validation every 250 steps, best checkpoint, checkpoints saved. Seed 0 → `runs/v3/seed0/`. Then the
+   **texture-reliance test**: collect `datasets/mjlab_terrain_600_notex` (`collect_mjlab_notex.yaml`, texture
+   amplitude 0, otherwise paired with `mjlab_terrain_600_dc`) and train hierarchical_meanmax / no_interaction /
+   flat_gru → `runs/v2/notex/`; compare with `runs/v2/all/`. Then seeds 1, 2 → `runs/v3/seed12/`. About 4–5 h
+   per v3 seed batch.
 
 **Next, when the results are in:**
 - [ ] Analyse v2: does any model beat the friction-only ceiling (0.795)? Hierarchical vs flat after adequate
@@ -238,8 +241,8 @@ the friction-only ceiling 0.795, so tactile cues are being used. v1 on Isaac dat
       configs/sensors/fsr_degraded.yaml` (stronger hysteresis/creep/gain spread) and on Isaac data (cross-sim).
 
 **Sim realism (from `docs/references/sensor_terrain_calibration.md`, literature review 2026-10-08):**
-- [ ] Texture reliance test: re-collect mjlab data with texture amplitude 0 (2 min) and retrain the key models. If
-      accuracy drops a lot, the models exploit a cue a real 2 mm skin with 1 cm taxels would mostly filter out.
+- [ ] Texture reliance test (queued in queue_v3b): if accuracy drops a lot without texture, the models exploit a cue
+      a real 2 mm skin with 1 cm taxels would mostly filter out.
 - [ ] Contact model: spatial skin filter (average texture over the taxel area, smoothing with skin depth), and pressure
       levels consistent with snow (1–2 kPa) vs ice (~10 kPa).
 - [ ] Sensor models: FSR `tau_unload` 20–100 ms per taxel, rate-independent hysteresis (7–17 % full scale),
