@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import copy
+from dataclasses import replace
 from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
 
 from somato.data.episode import DatasetMeta, Episode, episode_paths, load_robot, read_meta
+from somato.geometry.layout import SensorLayout
 
 
 class EpisodeStore:
@@ -26,6 +29,18 @@ class EpisodeStore:
 
     def labels(self, key: str = "terrain") -> torch.Tensor:
         return torch.stack([ep.labels[key].long() for ep in self.episodes])
+
+    def select_groups(self, names: list[str]) -> EpisodeStore:
+        """A view with only the sensor groups ``names`` (modality ablations); episodes share tensors."""
+        missing = [n for n in names if n not in self.layout.groups]
+        if missing:
+            raise ValueError(f"Unknown sensor groups {missing} (dataset has {self.layout.group_names})")
+        keep = [n for n in self.layout.group_names if n in names]  # layout order fixes the node order
+        view = copy.copy(self)
+        view.meta = replace(self.meta, groups={n: self.meta.groups[n] for n in keep})
+        view.layout = SensorLayout(self.layout.body_names, {n: self.layout.groups[n] for n in keep})
+        view.episodes = [replace(ep, data={n: ep.data[n] for n in keep}) for ep in self.episodes]
+        return view
 
 
 class WindowDataset(Dataset):

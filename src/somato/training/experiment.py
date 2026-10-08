@@ -45,6 +45,7 @@ class ExperimentConfig:
     split: tuple[float, float, float] = (0.7, 0.15, 0.15)
     split_seed: int = 0
     train_fraction: float = 1.0  # fraction of training episodes used (learning curves)
+    input_groups: list[str] = field(default_factory=list)  # sensor groups fed to the model (empty = all)
     save_checkpoint: bool = True
 
     @classmethod
@@ -94,6 +95,8 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     cfg = resolve_config_refs(cfg)
     seed_everything(cfg.train.seed)
     store = store or EpisodeStore(cfg.dataset)
+    if cfg.input_groups:
+        store = store.select_groups(cfg.input_groups)
     labels = store.labels("terrain")
     train_ids, val_ids, test_ids = stratified_split(labels, tuple(cfg.split), cfg.split_seed)
     if cfg.train_fraction < 1.0:

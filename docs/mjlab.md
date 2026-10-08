@@ -75,7 +75,40 @@ needed more solver iterations. `friction_opposes_sliding` is lower in MuJoCo (0.
 investigated. Plausible causes are soft-contact creep and the netforce sensor combining a link's two
 capsule-end contacts into one force at their weighted centroid.
 
-## Isaac vs MuJoCo: what the sensors see
+## Isaac vs MuJoCo with identical actuators (DC motor), and the simulator decision
+
+With both simulators on the same DC-motor actuator (`actuator: dc_motor`), the paired 600-episode datasets
+(`*_600_dc`) agree closely (Isaac / mjlab):
+
+* **Locomotion:** centroid speed 0.443 / 0.448 m/s, paired per-episode speed r = 0.99.
+* **Friction readout:** shear/normal ratio vs the friction parameter r = 0.991 / 0.992, paired r = 0.999.
+* **Tumbling and saturation:** episodes with the head flipped 5 / 6 (32 with the earlier actuator
+  mismatch); joint velocity > 8 rad/s in 152 / 164 episodes.
+
+Remaining differences:
+
+* **Isaac:** rigid impacts give heavy-tailed spikes (IMU |acc| up to 944 m/s², taxel pressure up to
+  1.4 MPa), and it reports shear on taxels without normal pressure in 0.2 % of non-contact samples.
+* **mjlab:** contact flicker. A link in contact loses all its force for 1–2 physics steps in ~4.5 % of
+  steps. Replaying those states in CPU MuJoCo confirms the capsule really is 4–16 µm above the ground: a
+  lightly loaded link rests at only ~50 µm of penetration with the default stiff soft-contact
+  (solref 0.02 s), and gait jitter separates it.
+  * A detection `margin` (with or without `gap`) does not help; MuJoCo only shifts the equilibrium.
+  * A softer robot contact (solref 0.1 s, ~0.7 mm penetration, skin-like) cuts the flicker to 0.24 %. But
+    it also softens friction (MuJoCo applies solref to the friction rows too): speed +22 %, speed no
+    longer depends on friction (r 0.04), 52 episodes partly unloaded, and `friction_opposes_sliding`
+    drops to 0.80. It is therefore not used. A compliant skin with stiff Coulomb friction needs explicit
+    contact pairs with a separate `solreffriction`.
+  * The 1–2 ms dropouts are largely smoothed by the FSR model's 20 ms unloading time constant.
+
+**Decision: mjlab (MuJoCo-Warp) with the default contact and DC-motor actuator is the primary
+simulator.** It agrees with Isaac on the quantities that matter here, collects data ~6× faster
+(600 episodes in 2 min vs 11 min), validates in 20 s vs 2.5 min, and can represent terrain and skin
+compliance through per-env contact parameters (PhysX is rigid). It also avoids this machine's Isaac issues
+(GUI/RTX crash on driver 595, Kit shutdown quirks). Isaac stays validated for cross-simulator transfer
+checks, a cheap proxy for sim-to-real robustness.
+
+## Isaac vs MuJoCo: what the sensors see (earlier datasets, actuator mismatch)
 
 `scripts/compare_datasets.py datasets/isaac_terrain_600 datasets/mjlab_terrain_600` compares 600 paired
 episodes from each simulator. Episode *i* has the same terrain class, friction, heading and joint-target

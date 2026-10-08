@@ -36,6 +36,10 @@ class MjlabSnakeConfig:
     # Soft-contact parameters of the robot geoms (time constant [s], damping ratio). Robot geoms get priority 1,
     # so their friction and solref override the ground's (MuJoCo otherwise takes the max of the two frictions).
     contact_solref: tuple[float, float] = (0.02, 1.0)
+    # Contact detection margin / gap of the robot geoms [m] (MuJoCo: contacts are detected below `margin` and active
+    # below `margin - gap`). With margin 0, lightly loaded links hover at ~0 penetration and the contact set flickers.
+    contact_margin: float = 0.0
+    contact_gap: float = 0.0
     # Recompute kinematics, contacts and sensors after each step so the reported state is the post-step state
     # (as in Isaac Lab). Without it, body poses and sensors lag joint positions by one physics step.
     forward_after_step: bool = True

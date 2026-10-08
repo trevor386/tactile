@@ -88,6 +88,8 @@ class MjlabBackend(SimBackend):
             for geom in spec.geoms:
                 geom.priority = 1
                 geom.solref = list(cfg.contact_solref)
+                geom.margin = cfg.contact_margin
+                geom.gap = cfg.contact_gap
             return spec
 
         robot = EntityCfg(

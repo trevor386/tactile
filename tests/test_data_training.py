@@ -115,6 +115,18 @@ def test_run_experiment_and_reload(tmp_path, dataset_dir, store):
     assert model.heads["terrain"].out[-1].out_features == len(store.meta.terrain_names)
 
 
+@pytest.mark.parametrize("groups", [["tactile"], ["joint", "imu"]])
+def test_input_groups_ablation(tmp_path, dataset_dir, store, groups):
+    view = store.select_groups(groups)
+    assert view.layout.group_names == groups and list(view.meta.groups) == groups
+    assert set(view.episodes[0].data) == set(groups) and len(store.layout.groups) == 3  # original untouched
+    for name, model in (("hier", TINY_MODEL), ("flat", {"architecture": "flat_recurrent", "hidden": 16})):
+        cfg = ExperimentConfig(name=name, dataset=str(dataset_dir), output_dir=str(tmp_path), model=model, sensors=IDEAL,
+                               train=TrainConfig(epochs=1, batch_size=4, output_steps=2), window=6, stride=6,
+                               split=(1 / 3, 1 / 3, 1 / 3), input_groups=groups, save_checkpoint=False)
+        assert 0.0 <= run_experiment(cfg, store, verbose=False)["test/terrain/acc_last"] <= 1.0
+
+
 def test_flat_baseline_experiment(tmp_path, dataset_dir, store):
     cfg = ExperimentConfig(name="flat", dataset=str(dataset_dir), output_dir=str(tmp_path), save_checkpoint=False,
                            model={"architecture": "flat_recurrent", "hidden": 16},
