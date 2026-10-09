@@ -11,14 +11,15 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 ## RESUME HERE (state as of 2026-10-09 ~05:40)
 
-* **Running, unattended:** queue v1e, E-1c (lr sweep 0.001 → 0.0003 → 0.003, each about 2.5 h), from 08:58,
-  until ~16:30. Outputs `runs/v1/e1c_lr<lr>/`.
+* **Running, unattended:** E-2, the main learning curves (`configs/experiments/v1_main_curves.yaml` →
+  `runs/v1/main_curves/`, log `runs/logs/v1_main_curves.log`), from 15:08, ~12 h (to ~03:00 on 2026-10-10). E-1c is
+  done (F-21).
 * **When it lands:**
-  1. Per model, pick the lr with the best validation accuracy at each fraction.
-  2. Write the E-2 study config: fractions 0.025 / 0.1 / 0.25 / 1.0, seeds 0–2; somato_pool, receptor_only, flat_gru,
-     transformer at their chosen lr. That needs per-model lr support in the study config: add a `lr` key in the
-     model's entry, or run one study per lr group.
-  3. Launch E-2.
+  1. Accuracy mean ± std over the 3 seeds per model and fraction (`results.csv`, `summary.md`, curves PNG).
+  2. Episodes needed by each baseline to reach somato_pool's accuracy (H-1).
+  3. Gap vs data (H-4), receptor_only vs somato_pool (H-14), per-class recall.
+  4. Then E-6 (robustness on the saved checkpoints, `configs/sensors/robustness_fsr_v1.yaml`) and E-7 (OOD Earth set:
+     collect `collect_mjlab_ood_earth.yaml`, write the open-set evaluation).
 * **Then:**
   1. E-1c (lr sweep with the chosen stage 3).
   2. E-2 (main curves, 3 seeds).
@@ -93,11 +94,11 @@ Avoid very long runs until the earlier steps are sound.
 | 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. | `configs/experiments/v1_signs_of_life.yaml` | ~2 h | T-1, T-6 | done 2026-10-08 (F-14, F-16; FSR bug caveat) |
 | 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | done 2026-10-09 (F-19: the GRU causes the stall) |
 | 2a | E-19b | Residual brain memory | Brain with `residual_memory` (± node-pool path) on the proxy and terrain at 10 %. | `configs/experiments/e19b_brain_residual.yaml` | ~45 min | E-19 | done 2026-10-09 (F-20: not fixed; main studies use the pool head) |
-| 2b | E-1c | **Baseline fairness / tuning** | somato_pool, receptor_only, flat_gru and transformer at 10 % and 100 %, fixed FSR model, lr 1e-3 / 3e-4 / 3e-3; the best lr per model goes into E-2. | `configs/experiments/v1_e1c.yaml` via queue v1e | ~7.5 h | E-19b | running (from 08:58) |
+| 2b | E-1c | **Baseline fairness / tuning** | somato_pool, receptor_only, flat_gru and transformer at 10 % and 100 %, fixed FSR model, lr 1e-3 / 3e-4 / 3e-3; the best lr per model goes into E-2. | `configs/experiments/v1_e1c.yaml` via queue v1e | ~6 h | E-19b | done 2026-10-09 (F-21) |
 | 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
 | 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | `v1_structure_ablations.yaml` | ~5 h | E-1 | done 2026-10-09 (F-18) |
 | 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | same study | — | E-1 | done 2026-10-09 (F-18) |
-| 5 | E-2 | **Main learning curves** (H-1, H-4, H-14) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato (chosen stage 3), somato no_spatial (receptor-only), flat_gru, flat_gru_raw, transformer, at the tuned learning rates. | to write | ~25 h | E-19, E-1c | queued |
+| 5 | E-2 | **Main learning curves** (H-1, H-4, H-14) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato_pool, receptor_only, flat_gru, transformer at the E-1c learning rates (flat_gru_raw dropped for time; add if flat looks feature-limited). | `configs/experiments/v1_main_curves.yaml` | ~12 h | E-1c | running (from 15:08) |
 | 6 | E-5 | Property estimation (H-11) | Regress friction, measured sinkage and roughness (plus classification) for the main models. | `configs/experiments/v1_properties.yaml` | ~3 h | T-7 | queued (ready to run) |
 | 7 | E-6 | Sensor robustness (H-2a, H-3) | Evaluate E-2 checkpoints under single-factor perturbations of the FSR v1 model (slower or faster unloading, more hysteresis, gain spread, noise, dead taxels). | T-8 suite | < 1 h | E-2, T-8 | queued |
 | 8 | E-8 | Sim-to-sim (H-2c) | Train on mjlab, test on Isaac (and the reverse) on paired episodes. | to write | ~3 h | T-10 | queued |

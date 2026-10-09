@@ -13,6 +13,31 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-21. E-1c, learning-rate sweep: learning rate barely matters; with tuned baselines the structured model leads by
+8–10 points at 10 % and 4.5–11 points at full data.** *Why:* baseline fairness before E-2. *Setup:*
+`configs/experiments/v1_e1c.yaml` (fixed FSR v1, pool head, widths matched ~428k), lr 3e-4 / 1e-3 / 3e-3, seed 0.
+The lr is chosen per model by validation accuracy.
+*Result:* test acc at the chosen lr (validation-best):
+
+| model | lr | 170 eps | 1,680 eps |
+|---|---|---|---|
+| somato_pool (stage 1 + 3D kernel + pool) | 1e-3 | **0.616** | **0.784** |
+| receptor_only (stage 1 + pool) | 1e-3 | 0.605 | 0.750 |
+| transformer | 1e-3 | 0.531 | 0.739 |
+| flat_gru | 3e-4 | 0.513 | 0.678 |
+
+*Evidence:*
+* Across the three learning rates, each model's test accuracy varies by ≤ 3 points (≤ 5 for flat at full data), so
+  the comparisons are not an artifact of one learning rate.
+* The tuned transformer is clearly stronger than in E-1 (0.739 vs 0.635 at full data; fixed FSR, width 108 vs 132).
+
+*Caveats:* one seed; the lr is chosen on validation and reported on test.
+*Implication:*
+* E-2 uses lr 1e-3 for the somato models and the transformer, 3e-4 for flat.
+* The somato–transformer gap shrinks from 8.5 to 4.5 points with 10× data: data efficiency (H-1) with a possible
+  convergence trend (H-4), to be checked with seeds.
+* The 3D kernel adds +1 / +3.4 points over receptor-only (H-14: stage 1 carries most of the benefit on terrain).
+
 **F-20. E-19b: a residual memory does not rescue the brain head; the main studies use the pool head.**
 *Setup:* `configs/experiments/e19b_brain_residual.yaml`, as E-19.
 *Result:*

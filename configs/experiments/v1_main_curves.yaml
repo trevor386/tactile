@@ -1,0 +1,16 @@
+# E-2: main learning curves (H-1, H-4, H-14). Simulation v1, fixed FSR v1 model, protocol v4, widths matched to
+# somato_pool (~428k), learning rate per model from E-1c (F-21), seeds 0-2, 42 / 168 / 420 / 1680 training episodes.
+# Structure spectrum: receptor_only (stage 1 + pooling) -> somato_pool (+ 3D kernel) vs. flat GRU and transformer.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_main_curves.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/main_curves
+fractions: [0.025, 0.1, 0.25, 1.0]
+seeds: [0, 1, 2]
+match_params: true
+save_checkpoints: true      # for E-6 (sensor robustness) and E-7 (OOD terrains)
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}
