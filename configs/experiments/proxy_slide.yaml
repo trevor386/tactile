@@ -1,0 +1,22 @@
+# E-13 (H-9, H-8): sliding-direction proxy. A pressure patch slides along or around the resting snake's skin; the
+# 4-way direction is readable only from how the pattern moves across neighbouring taxels over time (static joints and
+# IMU, stationary distractor contacts). Tests whether stage 2 on stage-1 latents detects motion across the skin, and
+# what the brain's memory adds, against the unstructured baselines.
+#   python scripts/proxy/make_slide_dataset.py --out datasets/proxy_slide_1200 --episodes 1200
+#   python scripts/data_efficiency.py --config configs/experiments/proxy_slide.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  dataset: datasets/proxy_slide_1200
+  augment: {random_yaw: true, random_translation: 1.0, sensor_dropout: 0.05}
+output_dir: runs/v1/proxy_slide
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: somato_v1
+models:
+  somato_v1: configs/models/somato_v1.yaml
+  somato_v1_no_spatial: configs/models/somato_v1_no_spatial.yaml
+  somato_v1_pool: configs/models/somato_v1_pool.yaml
+  flat_gru: configs/models/flat_gru.yaml
+  transformer: configs/models/transformer.yaml
