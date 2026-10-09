@@ -13,6 +13,45 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-18. E-3/E-4, structure ablations on terrain: stage-2 choices barely matter here; the family's lead over the
+baselines comes from stage 1 and pooling.**
+*Why:* what does each imposed structure contribute (H-5, H-6, H-7, H-8)?
+*Setup:* `configs/experiments/v1_structure_ablations.yaml`, fixed FSR model, widths matched (~636k), seed 0,
+360-episode test (SE ≈ ±2.6 points at 0.6, ±2.1 at 0.8). Validation re-run after the review fixes: 15/15.
+*Result (test acc):*
+
+| model | 170 eps | 1,680 eps | NLL (full) |
+|---|---|---|---|
+| somato_v1 (kernel3d, segregated, brain) | 0.615 | 0.798 | 0.48 |
+| somato_v1_mixed (modalities mixed in stage 2) | 0.604 | **0.800** | 0.47 |
+| somato_v1_pool (static mean+max head) | 0.617 | 0.776 | 0.50 |
+| somato_v1_no_spatial (no stage 2) | **0.618** | 0.775 | 0.51 |
+| somato_v1_graph (KNN attention instead of the kernel) | 0.600 | 0.748 | 0.58 |
+
+*Evidence:*
+* At 170 episodes all five are within ±1 SE.
+* At full data the kernel models lead no_spatial and pool by ~2 points (< 1 SE). The graph variant is ~5 points lower
+  (~2.4 SE; one seed).
+* Every family member, including no_spatial, beats E-1's baselines by a similar margin (~0.61 vs 0.49–0.51 at 10 %;
+  0.75–0.80 vs 0.64–0.67 at full).
+* The brain trains normally on terrain (no stall), unlike on the slide proxy (F-17).
+
+*Caveats:*
+* One seed.
+* E-1's baselines ran with the FSR bug (the family's E-3 numbers are within 1–2 points of its E-1 numbers, so the
+  comparison is roughly fair).
+* Baselines not yet tuned (E-1c).
+
+*Implication:*
+* On terrain classification in sim v1, the decisive bias is **stage 1**: one shared receptor encoder per modality,
+  followed by permutation-invariant pooling, i.e. "every taxel is the same kind of receptor". Spatial interaction
+  (H-5), segregation (H-7) and the dynamic brain (H-8) add ≤ 2 points here; the 3D kernel ≥ the graph alternative
+  (H-6, weak).
+* With F-17, the value of stage 2 is task-dependent. It is decisive for stimuli moving across the skin and marginal
+  for terrain identity, whose cues (pressure level, sinkage, roughness statistics) survive per-taxel encoding plus
+  pooling.
+* For E-2, include the receptor-only end of the spectrum (no_spatial) next to the full model and the baselines.
+
 **F-17. E-13, slide proxy: the 3D kernel detects motion across the skin (H-9 ✓), but the brain head stalls and then
 memorizes (H-8 ✗ for now).**
 *Why:* can stage 2, acting on stage-1 latents, tell which way a contact slides (H-9), and what does the brain add (H-8)?

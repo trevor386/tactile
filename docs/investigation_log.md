@@ -9,14 +9,12 @@ caveats). Design: `docs/architecture.md`. Simulators: `docs/mjlab.md`, `docs/isa
 Item IDs are stable: H = hypothesis, E = experiment, T = task (code or setup), Q = question for the user, D = decision.
 Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-09 ~02:00)
+## RESUME HERE (state as of 2026-10-09 ~05:40)
 
-* **Running, unattended:**
-  1. Queue v1a: E-3+E-4 (structure ablations; E-13 is done, F-17), until ~06:00.
-  2. Queue v1c, waiting behind it: `validate_mjlab`, then E-19 (brain diagnostics on proxy and terrain, ~2.5 h).
-* **When results land:** run `python scripts/analysis/summarize_study.py <output dir>` and write a findings entry:
-  * E-3/E-4 → H-5/H-6/H-7/H-8 (does stage 2 help on terrain with a pool head? the graph?);
-  * E-19 → choose the stage-3 design (fix the brain or fall back to pooling + memory).
+* **Running, unattended:** queue v1c, E-19 (brain diagnostics on the proxy, then on terrain), started 05:30,
+  until ~08:00. E-3/E-4 are done (F-18); `validate_mjlab` after the review fixes: 15/15.
+* **When E-19 lands:** run `python scripts/analysis/summarize_study.py runs/v1/e19_brain_proxy` (and
+  `e19_brain_terrain`) and write a findings entry. Choose the stage-3 design: a fixed brain, or pooling plus memory.
 * **Then:**
   1. E-1c (lr sweep with the chosen stage 3).
   2. E-2 (main curves, 3 seeds).
@@ -47,7 +45,7 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
-| queue v1a | E-13 (slide proxy, ~2 h), then E-3+E-4 (structure ablations, ~5 h) | 2026-10-08 23:10 | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | running (E-13 first) |
+| queue v1a | E-13, then E-3+E-4 | 2026-10-08 23:10 | `runs/logs/queue_v1a.sh` | done 2026-10-09 05:29 (F-17, F-18) |
 | queue v1c | after v1a: `validate_mjlab` re-run (review fix), then E-19 brain diagnostics on the proxy and on terrain at 10 % (~2.5 h) | 2026-10-09 01:55 (waiting) | `runs/logs/queue_v1c.sh`, log `runs/logs/queue_v1c.log`; outputs `runs/v1/e19_brain_proxy/`, `runs/v1/e19_brain_terrain/` | waiting for v1a. (Queue v1b, E-1c, was cancelled before it started: the lr sweep waits for the stage-3 decision.) |
 
 ## 2. Hypotheses and conjectures
@@ -66,9 +64,10 @@ point, to be changed only on evidence.
 | H-2 | The somato hierarchy generalizes better under distribution shift. | A smaller accuracy drop than the baselines under (a) sensor non-idealities unseen in training, (b) terrain parameters outside the training range (cold ice, Europa-like, sand, gravel), (c) another simulator, (d) layout changes (dead taxels, other robots). | E-6 to E-10 | open |
 | H-3 | A simple simulator lets unstructured models exploit simulator shortcuts: they look good in sim and fall off in the real world. | Any baseline advantage shrinks as the simulation becomes more realistic (v1 vs v0) and reverses under shift; baselines rely on cues a real skin cannot see. | E-1/E-2 vs archived v0, E-6 to E-9, cue-reliance probes | open |
 | H-4 | Structure trades expressiveness for efficiency: its advantage shrinks with data and may cross over. | The curves converge or cross at large data. | E-2, E-11 | open (v0: no crossover at 1,680 episodes with enough steps, F0-10) |
-| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous, and how much it matters depends on the sensor physics. | no_spatial loses most on FSR (normal-only) and least with shear-sensing taxels. | E-3, E-12 | open (v0 supportive, F0-7) |
-| H-6 | The continuous 3D kernel (weights a function of relative position only) is more data-efficient than feature-dependent graph message passing. | somato_v1 ≥ somato_v1_graph at small data. | E-4 | open |
-| H-7 | Keeping modalities segregated until stage 3 is at least as data-efficient as mixing them in stage 2, and generalizes better: each receptor type keeps its own code, as in the nervous system. | somato_v1 ≥ somato_v1_mixed, especially under shift. | E-3, E-6 | open |
+| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous, and how much it matters depends on the sensor physics. | no_spatial loses most on FSR (normal-only) and least with shear-sensing taxels. | E-3, E-12 | **task-dependent so far**: marginal on terrain (≤ 2 points, F-18), decisive for moving stimuli (0.98 vs 0.45, F-17). One seed. |
+| H-6 | The continuous 3D kernel (weights a function of relative position only) is more data-efficient than feature-dependent graph message passing. | somato_v1 ≥ somato_v1_graph at small data. | E-4 | weakly supported (F-18: equal at 10 %, kernel +5 at full data; one seed) |
+| H-7 | Keeping modalities segregated until stage 3 is at least as data-efficient as mixing them in stage 2, and generalizes better: each receptor type keeps its own code, as in the nervous system. | somato_v1 ≥ somato_v1_mixed, especially under shift. | E-3, E-6 | no difference in-distribution (F-18); the generalization part is still open (E-6) |
+| H-14 | (new, from F-18) The main benefit over unstructured models on terrain comes from stage 1: a receptor encoder shared by all sensors of a modality plus permutation-invariant pooling. | A receptor-only model (no_spatial + pool) matches the full model on terrain and beats the baselines by the same margin. | E-2 (include no_spatial / receptor-only) | suggested by F-18 |
 | H-8 | A dynamic stage 3 (attention at the current body geometry, memory over time) beats static pooling, because a fixed attention pattern does not fit a moving body. | somato_v1 > somato_v1_pool, especially on tasks needing body-wide or temporal integration. | E-3, E-13, E-19 | **contradicted so far for the current implementation** (F-17: brain stalls and memorizes; pool 0.98 vs brain 0.25 on the proxy). Diagnosing (E-19); the idea is not refuted, the implementation trains badly. |
 | H-9 | Stage 2 acting on stage-1 latents, which encode each taxel's recent history, can detect stimuli moving across the skin (e.g. a force sliding along the body in a direction) without an explicit spatio-temporal kernel. | High accuracy on a slide-direction proxy task; it drops without stage 2. | E-13 | **supported** (F-17: 0.98 with stage 2 + pool from 84 episodes, 0.45 without stage 2, baselines 0.2–0.54; one seed) |
 | H-10 | Self-supervised objectives (masked sensor prediction, reconstruction, cross-modal prediction) improve data efficiency, more for the structured model, whose stages have natural local objectives. Training stages on their own, with only the last stage task-specific, may generalize better than end-to-end training. | Pretrained + fine-tuned > supervised-only at small data; layer-wise ≥ end-to-end under shift. | E-14, E-15 | open |
@@ -91,9 +90,9 @@ Avoid very long runs until the earlier steps are sound.
 | 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | queued (v1c) |
 | 2b | E-1c | **Baseline fairness / tuning** | E-1 again with the fixed FSR model, learning rate 3e-4 / 1e-3 / 3e-3 for every model; the best lr per model goes into E-2. | `--set base_overrides.train.lr=...` on `v1_signs_of_life.yaml` | ~5.5 h | E-19 decision | queued |
 | 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
-| 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | to write | ~3 h | E-1 | queued |
-| 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | to write | ~1.5 h | E-1 | queued |
-| 5 | E-2 | **Main learning curves** (H-1, H-4) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato_v1, flat_gru, flat_gru_raw, transformer. | to write | ~20 h | E-1, E-1b | queued |
+| 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | `v1_structure_ablations.yaml` | ~5 h | E-1 | done 2026-10-09 (F-18) |
+| 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | same study | — | E-1 | done 2026-10-09 (F-18) |
+| 5 | E-2 | **Main learning curves** (H-1, H-4, H-14) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato (chosen stage 3), somato no_spatial (receptor-only), flat_gru, flat_gru_raw, transformer, at the tuned learning rates. | to write | ~25 h | E-19, E-1c | queued |
 | 6 | E-5 | Property estimation (H-11) | Regress friction, measured sinkage and roughness (plus classification) for the main models. | `configs/experiments/v1_properties.yaml` | ~3 h | T-7 | queued (ready to run) |
 | 7 | E-6 | Sensor robustness (H-2a, H-3) | Evaluate E-2 checkpoints under single-factor perturbations of the FSR v1 model (slower or faster unloading, more hysteresis, gain spread, noise, dead taxels). | T-8 suite | < 1 h | E-2, T-8 | queued |
 | 8 | E-8 | Sim-to-sim (H-2c) | Train on mjlab, test on Isaac (and the reverse) on paired episodes. | to write | ~3 h | T-10 | queued |
