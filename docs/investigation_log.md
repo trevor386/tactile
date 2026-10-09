@@ -123,7 +123,7 @@ Avoid very long runs until the earlier steps are sound.
 | ID | task | for | status |
 |---|---|---|---|
 | T-7 | Property-regression task: friction, measured sinkage (from body poses: capsule depth when in contact), roughness amplitude; normalized targets, Huber loss; multi-task with classification. | E-5 | done 2026-10-08 for friction + measured sinkage (`property_regression` task, `data/derived.py`, heads created automatically, stats saved in the checkpoint; study config `configs/experiments/v1_properties.yaml`). Felt roughness as a target still to add. |
-| T-8 | Robustness suite v1: perturbations relative to `fsr_v1.yaml`, plus dead-taxel patterns at test time (node mask in evaluation). | E-6 | queued |
+| T-8 | Robustness suite v1: perturbations relative to `fsr_v1.yaml`, plus dead-taxel patterns at test time (node mask in evaluation). | E-6 | done 2026-10-08 (`configs/sensors/robustness_fsr_v1.yaml`, `AugmentConfig.eval_sensor_dropout`) |
 | T-9 | OOD terrain catalogs: cold arctic ice, Europa-like (g = 1.315 m/s² needs a per-scene gravity change in mjlab; skin assumption Q-2), dry sand, gravel; open-set evaluation path for classes absent in training. | E-7 | queued |
 | T-10 | Isaac parity for sim-to-sim: PhysX compliant-contact stiffness and damping per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac still runs on driver 580. | E-8 | queued |
 | T-11 | SSL objectives: masked-sensor prediction (stage-1/2 targets), reconstruction, next-step prediction, cross-modal prediction (touch ↔ proprioception); trainer support for pretraining, freezing stages and a task-specific last stage only. | E-14, E-15 | queued |

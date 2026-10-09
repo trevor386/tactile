@@ -1,0 +1,32 @@
+# Europa-like terrains (E-7, H-2b), collected with gravity 1.315 m/s^2 (collect_mjlab_europa.yaml): a link presses only
+# ~0.33 N, i.e. 1.5-2.6 kPa on solid ice, the pressure of Earth snow or sand, and the IMU reads 1.315 m/s^2 at rest.
+# Everything here is out of distribution for models trained on ice_snow_v1 (Earth). Friction is an ice-on-ice proxy
+# (no polymer data at 80-130 K); porosity, cohesion and roughness are inferred, not measured
+# (docs/references/terrain_physics_v2.md, sections 3 and 6). The skin question (Q-2): silicone is glassy at ~100 K,
+# which would make contact orders of magnitude stiffer; both variants are included.
+texture_modes: 8
+classes:
+  europa_ice_compliant_skin:   # solid ice, skin still compliant (heated skin)
+    friction: [0.3, 0.8]
+    contact_timeconst: [0.015, 0.02]
+    contact_dampratio: [0.25, 0.5]
+    contact_dmin: [0.9, 0.95]
+    contact_width: [0.0005, 0.001]
+    texture_amp: [0.4, 1.0]
+    texture_wavelength: [0.03, 0.15]
+  europa_ice_glassy_skin:      # solid ice, glassy skin: much stiffer contact
+    friction: [0.3, 0.8]
+    contact_timeconst: [0.005, 0.01]
+    contact_dampratio: [0.25, 0.5]
+    contact_dmin: [0.95, 0.99]
+    contact_width: [0.0002, 0.0005]
+    texture_amp: [0.4, 1.0]
+    texture_wavelength: [0.03, 0.15]
+  europa_porous_regolith:      # sintered/porous frost layer: sinkage 0.01-8 mm, plastic
+    friction: [0.3, 0.8]
+    contact_timeconst: [0.02, 0.04]
+    contact_dampratio: [1.0, 2.0]
+    contact_dmin: [0.05, 0.9]
+    contact_width: [0.001, 0.03]
+    texture_amp: [0.2, 0.8]
+    texture_wavelength: [0.03, 0.2]

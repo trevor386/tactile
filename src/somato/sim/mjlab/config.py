@@ -10,6 +10,8 @@ class MjlabSnakeConfig:
     num_envs: int = 64
     env_spacing: float = 4.0
     physics_dt: float = 1.0 / 1000.0
+    gravity: float = 9.81  # m/s^2 (Europa: 1.315); the IMU's specific force changes with it
+
     device: str = "cuda:0"
     # Explicit PD actuator, same model and gains as the Isaac backend (see IsaacSnakeConfig): "dc_motor" clips the PD
     # torque to the linear torque-speed curve (stall `saturation_effort`, no-load speed `velocity_limit`, continuous

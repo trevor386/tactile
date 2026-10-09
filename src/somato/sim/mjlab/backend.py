@@ -52,7 +52,8 @@ class MjlabBackend(SimBackend):
         sim_cfg = SimulationCfg(
             nconmax=cfg.nconmax, njmax=cfg.njmax,
             mujoco=MujocoCfg(timestep=cfg.physics_dt, solver=cfg.solver, iterations=cfg.iterations,
-                             ls_iterations=cfg.ls_iterations, cone=cfg.cone, impratio=cfg.impratio),
+                             ls_iterations=cfg.ls_iterations, cone=cfg.cone, impratio=cfg.impratio,
+                             gravity=(0.0, 0.0, -cfg.gravity)),
         )
         self.sim = Simulation(num_envs=cfg.num_envs, cfg=sim_cfg, spec=self.scene.spec, device=cfg.device)
         self.scene.initialize(self.sim.mj_model, self.sim.model, self.sim.data)

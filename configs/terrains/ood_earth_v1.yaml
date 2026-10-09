@@ -1,0 +1,30 @@
+# Out-of-distribution terrains on Earth for generalization tests (E-7, H-2b, H-13): never seen in training. Ranges from
+# docs/references/terrain_physics_v2.md, section 6; same parameterization and calibration as ice_snow_v1.yaml.
+# Models trained on ice_snow_v1 have no class for these: evaluate property estimates (friction, measured sinkage) and
+# how confidently the classifier maps them onto the training classes.
+texture_modes: 8
+classes:
+  cold_arctic_ice:    # -30 C: grippy (tread rubber 0.4-1.5, frosty ~0.5, polished to ~2), hard, skin-dominated
+    friction: [0.4, 1.5]
+    contact_timeconst: [0.015, 0.02]
+    contact_dampratio: [0.1, 0.4]
+    contact_dmin: [0.9, 0.95]
+    contact_width: [0.0005, 0.001]
+    texture_amp: [0.0, 0.9]
+    texture_wavelength: [0.03, 0.15]
+  dry_sand:           # sinkage 0.9-3.8 mm (secant 600-2700 N/m), mu 0.4-0.8, ripples ~5-10 mm at 50-150 mm
+    friction: [0.4, 0.8]
+    contact_timeconst: [0.02, 0.03]
+    contact_dampratio: [1.0, 2.0]
+    contact_dmin: [0.15, 0.4]
+    contact_width: [0.005, 0.015]
+    texture_amp: [0.2, 0.6]
+    texture_wavelength: [0.05, 0.15]
+  gravel:             # D 10-30 mm: few point contacts (stiff), rearrangement up to ~5 mm, relief ~0.2-0.3 D at ~D
+    friction: [0.5, 1.0]
+    contact_timeconst: [0.015, 0.02]
+    contact_dampratio: [0.2, 0.6]
+    contact_dmin: [0.3, 0.9]
+    contact_width: [0.001, 0.01]
+    texture_amp: [0.6, 1.0]
+    texture_wavelength: [0.01, 0.03]
