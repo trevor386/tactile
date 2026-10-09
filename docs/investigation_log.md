@@ -33,9 +33,14 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
   * `source ~/miniconda3/etc/profile.d/conda.sh; conda activate mjlab; unset PYTHONPATH`.
   * Strip `/opt/ros` from `LD_LIBRARY_PATH` (ROS Jazzy is sourced in `~/.bashrc`).
   * Run every Python process that loads a dataset or uses the GPU under a memory cap, so a mistake cannot freeze the
-    machine again: `systemd-run --user --scope -q -p MemoryMax=12G python ...`.
+    machine again: `systemd-run --user --scope -q -p MemoryMax=24G python ...` for training on the 2,400-episode set,
+    8–12G for analysis.
+  * Caps should not throttle: mapped dataset pages count against the cap, and the training set touches ~13.5 GB. A
+    running job's cap can be raised in place with
+    `systemctl --user set-property --runtime <run-*.scope> MemoryMax=24G`.
   * Datasets load through the memory-mapped cache (`cache_v1/`), so several processes may share one dataset. Still
     run only one GPU training job at a time (8 GB card; somato_v1 peaks at 4.8 GB).
+* **Git:** commit after every change and push when possible. Pushing currently fails (Q-4).
 
 ## 1. Ongoing experiments
 
@@ -109,8 +114,8 @@ Avoid very long runs until the earlier steps are sound.
 | T-1 | Collect `datasets/mjlab_v1_2400` with the revised catalog v1 and build its cache (16 GB). | done 2026-10-08 (validation 15/15, F-12) |
 | T-2 | Write `docs/architecture.md` for version 1. Include: stage mapping receptor / spinal cord / brain; why stage 2 uses the current poses every step (that is how a 3D kernel follows a moving body); the kernel3d vs graph distinction; segregation; brain; baselines. | next |
 | T-3 | Update `docs/mjlab.md` (compliant contact pairs, calibration), `README.md` (v1 configs and quickstart), `docs/isaac_sim.md` (driver 580 since 2026-10-08). | next |
-| T-4 | Update the persistent memory notes (driver change, memory-cap rule, log structure). | next |
-| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | next |
+| T-4 | Update the persistent memory notes (driver change, memory-cap rule, log structure). | done 2026-10-08 |
+| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | pending: a three-reviewer workflow was interrupted on 2026-10-08 before it ran; re-run once the user agrees |
 | T-6 | `scripts/analysis/task_ceiling.py` for catalog v1: Bayes ceilings from the sampled parameters (friction only, + compliance, + roughness), to interpret E-1. | done 2026-10-08 (F-13) |
 
 **Planned**
@@ -169,6 +174,7 @@ Avoid very long runs until the earlier steps are sound.
 | Q-1 | Should the primary task stay 5-class terrain classification, or move to physical property estimation (friction, compliance/sinkage, roughness), which transfers to unknown worlds (H-11)? | Keep classification as primary for E-1/E-2; add property estimation (E-5). |
 | Q-2 | Europa-like OOD set: compliant silicone skin, or glassy skin (silicone is glassy at ~100 K, which changes contact stiffness by orders of magnitude)? | Model both as two OOD sets. |
 | Q-3 | With literature friction ranges (glare ice 0.05–1.0 across temperature), glare ice and dry concrete are nearly indistinguishable by touch (same skin-dominated stiffness, invisible fine texture). That is physically honest, but it caps the classification ceiling. Keep it? | Keep; T-6 quantifies the ceiling. |
+| Q-4 | `git push` to github.com/trevor386/tactile fails with 403: this machine's gh/git login is user `schannap` (git identity "Suchitha", which also authors the commits). Grant that account write access, or run `gh auth login` as trevor386 (and set `git config user.name/email` if commits should carry your identity)? | Keep committing locally; push as soon as it works. |
 
 ## 6. Decisions
 
