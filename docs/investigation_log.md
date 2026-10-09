@@ -47,7 +47,7 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
-| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running: 10 % done (F-14: somato 0.630, transformer 0.506, flat 0.492); 100 % runs until ~23:00 |
+| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running: 10 % done (F-14: somato 0.630, transformer 0.506, flat 0.492); 100 % until ~23:00. **Caveat: ran with the FSR hysteresis bug (F-15)**; numbers not comparable with later runs. |
 | queue v1a | E-13 (slide proxy), then E-3+E-4 (structure ablations); starts when E-1 ends | 2026-10-08 21:30 (waiting) | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | waiting for E-1 (~7 h after it starts) |
 
 ## 2. Hypotheses and conjectures
@@ -117,7 +117,7 @@ Avoid very long runs until the earlier steps are sound.
 | T-2 | Write `docs/architecture.md` for version 1. Include: stage mapping receptor / spinal cord / brain; why stage 2 uses the current poses every step (that is how a 3D kernel follows a moving body); the kernel3d vs graph distinction; segregation; brain; baselines. | next |
 | T-3 | Update `docs/mjlab.md` (compliant contact pairs, calibration), `README.md` (v1 configs and quickstart), `docs/isaac_sim.md` (driver 580 since 2026-10-08). | next |
 | T-4 | Update the persistent memory notes (driver change, memory-cap rule, log structure). | done 2026-10-08 |
-| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | running: two Sonnet reviewers (models/training; sim/sensors/data), findings verified in the main session |
+| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | done 2026-10-08 (F-15): 1 result-affecting bug (FSR hysteresis offset; E-1 affected) and 6 latent ones, all fixed with tests. Re-run `validate_mjlab.py` after E-1 frees the GPU (the solimp dmax write; no v1 class changes). |
 | T-6 | `scripts/analysis/task_ceiling.py` for catalog v1: Bayes ceilings from the sampled parameters (friction only, + compliance, + roughness), to interpret E-1. | done 2026-10-08 (F-13) |
 
 **Planned**

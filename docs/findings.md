@@ -13,6 +13,30 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-15. Code review of the v1 changes (T-5): one bug that affects results, six latent ones.** *Why:* catch bugs before
+long experiments. *Setup:* two independent Sonnet reviewers (models/training; sim/sensors/data). Every finding was
+re-checked against the code before fixing. Commit "Code-review fixes".
+*Result:*
+* **Affects results:** the FSR v1 rate-independent hysteresis (play operator) settled at half its band when the load
+  returned to zero. That left a permanent 4–9 % full-scale offset after every contact and a dead zone that hid light
+  contacts. Fixed: the band narrows to zero with the output, so the loop closes at no load (as measured FSR loops
+  do), with a test.
+* **Latent** (no current config triggered them):
+  * per-step labels were not aligned with strided brain steps;
+  * a TBPTT chunk without a brain step crashed, and the online demo crashed on its first frames;
+  * a window that is not a multiple of the stride was silently scored at an earlier step;
+  * an override's `graph.k` was ignored when the base had `k_per_group`;
+  * the Europa glassy-skin dmin above the default dmax was silently capped;
+  * non-native IMU under non-Earth gravity was wrong;
+  * the compliance check ran on backends without compliance.
+
+  All fixed, with tests.
+
+*Implication:* **E-1 ran with the hysteresis bug** (sensor model `fsr_v1`, all three models equally affected; it hid
+light contacts and added history-dependent offsets). E-1 is still a valid sign of life, but its numbers are not
+comparable with later runs; E-2 supersedes it. Queue v1a (E-13, E-3/E-4) starts new processes and uses the fixed
+code.
+
 **F-14. E-1, first half: at 10 % of the data the structured model leads both baselines (interim, one seed).**
 *Why:* signs of life on simulation v1 and a first test of H-1. *Setup:* `configs/experiments/v1_signs_of_life.yaml`,
 170 training episodes, 3,000 steps (protocol v4), widths matched (~636k), 360-episode test set (SE ≈ ±2.6 points at
