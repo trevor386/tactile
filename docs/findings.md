@@ -13,6 +13,45 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-16. E-1 complete: the structured model leads at both data sizes; no crossover yet (one seed, FSR bug).**
+*Why:* signs of life and a first test of H-1/H-4. *Setup:* as F-14; full data = 1,680 episodes, 10,245 steps.
+**Caveat: ran with the FSR hysteresis bug (F-15)**, identical for all models.
+*Result:*
+
+| model | 170 eps | 1,680 eps | NLL (full) | best step (full) |
+|---|---|---|---|---|
+| somato_v1 | **0.630** | **0.782** | **0.49** | 9,500 / 10,245 |
+| flat_gru | 0.492 | 0.672 | 0.80 | 3,500 |
+| transformer | 0.506 | 0.635 | 0.83 | 8,750 |
+
+Recall at full data:
+
+| class | somato | flat | transformer |
+|---|---|---|---|
+| glare | 0.55 | 0.33 | 0.16 |
+| rough | **0.83** | 0.51 | 0.55 |
+| packed | 0.76 | 0.70 | 0.61 |
+| fresh | 1.00 | 0.98 | 0.99 |
+| concrete | 0.80 | 0.85 | 0.88 |
+
+*Evidence:*
+* The gap is 11–15 points at full data and 12–14 at 10 %. The flat GRU stops improving after 3,500 steps (it
+  memorizes), so it is data-limited, not step-limited.
+* The structured model's largest advantage is rough ice (+28 to +31), whose cue is cm-scale relief across
+  neighbouring taxels (F-13), the spatial pattern stage 2 is designed for.
+* The baselines lump glare ice into concrete, the touch-ambiguous pair (Q-3); the structured model separates them
+  better (probably through friction where glare ice is slippery).
+
+*Caveats:*
+* One seed.
+* The FSR bug.
+* **Baselines untuned:** lr 1e-3, warmup 1 epoch for all; the transformer learns slowly (val 0.56–0.61) and may need a
+  lower learning rate.
+* Everything is far from the ~0.92 noisy ceiling.
+
+*Implication:* encouraging for H-1, nothing for H-4 yet. Before E-2: **E-1c** reruns E-1 with the fixed sensor and a
+learning-rate sweep (3e-4, 1e-3, 3e-3) for all three models, so the baselines get a fair chance.
+
 **F-15. Code review of the v1 changes (T-5): one bug that affects results, six latent ones.** *Why:* catch bugs before
 long experiments. *Setup:* two independent Sonnet reviewers (models/training; sim/sensors/data). Every finding was
 re-checked against the code before fixing. Commit "Code-review fixes".

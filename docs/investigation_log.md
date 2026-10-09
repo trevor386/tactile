@@ -9,18 +9,19 @@ caveats). Design: `docs/architecture.md`. Simulators: `docs/mjlab.md`, `docs/isa
 Item IDs are stable: H = hypothesis, E = experiment, T = task (code or setup), Q = question for the user, D = decision.
 Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-08 ~21:20)
+## RESUME HERE (state as of 2026-10-08 ~23:15)
 
-* **Running:** E-1, signs of life (log `runs/logs/v1_signs_of_life.log`, output `runs/v1/signs_of_life/`), started
-  21:09. Order: the 10 % fraction (somato_v1, flat_gru, transformer), then 100 %. About 2 h (done ~23:00).
-* **Next:** while E-1 runs, T-2 to T-5 (docs, independent code review). When E-1 lands, analyse it (findings entry):
-  * accuracy vs the Bayes ceilings (F-13: 0.92 noisy, 0.98 exact);
-  * per-class recall (expect glare ice ↔ concrete confusions);
-  * calibration (NLL);
-  * learning curves (log.jsonl);
-  * best_step (budget adequacy).
+* **Running, unattended:**
+  1. Queue v1a: E-13 (slide proxy, ~2 h), then E-3+E-4 (structure ablations, ~5 h).
+  2. Queue v1b, waiting behind it: `validate_mjlab` (review fix), then E-1c (learning-rate sweep, ~5.5 h).
 
-  Then E-1b and E-3.
+  Expect everything done around noon on 2026-10-09.
+* **When results land:** analyse each one with `python scripts/analysis/summarize_study.py <output dir>` (accuracy,
+  NLL, best step, val curve, per-class recall) and write a findings entry:
+  * E-13 → H-9/H-8: does somato_v1 beat no_spatial, pool and the baselines on slide direction?
+  * E-3/E-4 → H-5/H-6/H-7/H-8;
+  * E-1c → choose the learning rate per model for E-2.
+* **Then:** E-2, the main learning curves with 3 seeds and the tuned learning rates (~20 h); then E-5, E-6, E-7.
 * **Status commands:**
   ```bash
   tail -3 runs/logs/collect_mjlab_v1_2400.log
@@ -47,8 +48,8 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
-| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running: 10 % done (F-14: somato 0.630, transformer 0.506, flat 0.492); 100 % until ~23:00. **Caveat: ran with the FSR hysteresis bug (F-15)**; numbers not comparable with later runs. |
-| queue v1a | E-13 (slide proxy), then E-3+E-4 (structure ablations); starts when E-1 ends | 2026-10-08 21:30 (waiting) | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | waiting for E-1 (~7 h after it starts) |
+| queue v1a | E-13 (slide proxy, ~2 h), then E-3+E-4 (structure ablations, ~5 h) | 2026-10-08 23:10 | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | running (E-13 first) |
+| queue v1b | after v1a: `validate_mjlab` re-run (review fix), then E-1c (fixed FSR, lr 3e-4 / 1e-3 / 3e-3 × 3 models × 10 %/100 %, ~5.5 h) | waiting | `runs/logs/queue_v1b.sh`, log `runs/logs/queue_v1b.log`; outputs `runs/v1/signs_of_life_lr*/` | waiting for v1a |
 
 ## 2. Hypotheses and conjectures
 
@@ -87,8 +88,9 @@ Avoid very long runs until the earlier steps are sound.
 
 | # | ID | experiment | purpose / design | config | cost | depends on | status |
 |---|---|---|---|---|---|---|---|
-| 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. Check learning curves, per-class recall and calibration against the Bayes ceilings (F-13). | `configs/experiments/v1_signs_of_life.yaml` | ~2.5 h | T-1, T-6 | running |
-| 2 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. | to write | ~2 h | E-1 | queued |
+| 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. | `configs/experiments/v1_signs_of_life.yaml` | ~2 h | T-1, T-6 | done 2026-10-08 (F-14, F-16; FSR bug caveat) |
+| 2 | E-1c | **Baseline fairness / tuning** | E-1 again with the fixed FSR model, learning rate 3e-4 / 1e-3 / 3e-3 for every model; the best lr per model goes into E-2. | queue v1b (`--set base_overrides.train.lr=...`) | ~5.5 h | review fixes | queued (v1b) |
+| 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
 | 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | to write | ~3 h | E-1 | queued |
 | 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | to write | ~1.5 h | E-1 | queued |
 | 5 | E-2 | **Main learning curves** (H-1, H-4) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato_v1, flat_gru, flat_gru_raw, transformer. | to write | ~20 h | E-1, E-1b | queued |
