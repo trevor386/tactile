@@ -13,6 +13,45 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-17. E-13, slide proxy: the 3D kernel detects motion across the skin (H-9 ✓), but the brain head stalls and then
+memorizes (H-8 ✗ for now).**
+*Why:* can stage 2, acting on stage-1 latents, tell which way a contact slides (H-9), and what does the brain add (H-8)?
+*Setup:*
+* `configs/experiments/proxy_slide.yaml`, 4 directions (chance 0.25);
+* 84 and 840 training episodes;
+* widths matched (pool dim 84, no_spatial 88, somato_v1 64);
+* fixed FSR model.
+
+*Result (test acc):*
+
+| model | 84 eps | 840 eps |
+|---|---|---|
+| somato_v1_pool (static mean+max head) | **0.983** | **0.960** |
+| somato_v1 (brain) | 0.250 | 0.811 |
+| somato_v1_no_spatial (brain) | 0.461 | 0.446 |
+| flat_gru | 0.201 | 0.542 |
+| transformer | 0.253 | 0.308 |
+
+*Evidence:*
+* Stage 1 + kernel3d + pooling learns the direction from 84 episodes (val 0.96 already at the first quarter of the
+  budget).
+* Without stage 2, the model cannot (0.45); nor can the unstructured baselines, which see the same kinematics.
+* The brain head's training loss sits at exactly ln 4 (uniform output) for ~1,500 steps. It then falls to 0.001 while
+  validation stays at chance: it memorized the 84 episodes. At 840 episodes the brain escapes later (val 0.25 → 0.85).
+  no_spatial (also brain) shows no stall but memorizes too.
+
+*Caveats:* one seed; a synthetic stimulus-level proxy.
+*Implication:*
+* The spatial operator is essential for moving stimuli, and here unstructured models fail outright: strong support
+  for H-9 and for structure in general.
+* The brain head as implemented has an optimization/generalization problem (same symptom as v0's cluster head). It
+  carries ~208k more head parameters than the pool head at the same width.
+* Diagnose before tuning: E-19 (pool vs brain vs brain without GRU / without attention / with a direct node-pool path /
+  smaller), on the proxy and on terrain at 10 %. E-1c waits for the stage-3 decision.
+* Related, E-3 so far (terrain, 10 %): somato_v1 0.615, no_spatial 0.618, mixed 0.604. With the brain head, stage 2
+  adds nothing on terrain at low data, so E-1's lead over the baselines may come from stage 1 and region pooling, not
+  the kernel. Wait for the pool and graph results.
+
 **F-16. E-1 complete: the structured model leads at both data sizes; no crossover yet (one seed, FSR bug).**
 *Why:* signs of life and a first test of H-1/H-4. *Setup:* as F-14; full data = 1,680 episodes, 10,245 steps.
 **Caveat: ran with the FSR hysteresis bug (F-15)**, identical for all models.

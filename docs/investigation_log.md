@@ -9,19 +9,18 @@ caveats). Design: `docs/architecture.md`. Simulators: `docs/mjlab.md`, `docs/isa
 Item IDs are stable: H = hypothesis, E = experiment, T = task (code or setup), Q = question for the user, D = decision.
 Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-08 ~23:15)
+## RESUME HERE (state as of 2026-10-09 ~02:00)
 
 * **Running, unattended:**
-  1. Queue v1a: E-13 (slide proxy, ~2 h), then E-3+E-4 (structure ablations, ~5 h).
-  2. Queue v1b, waiting behind it: `validate_mjlab` (review fix), then E-1c (learning-rate sweep, ~5.5 h).
-
-  Expect everything done around noon on 2026-10-09.
-* **When results land:** analyse each one with `python scripts/analysis/summarize_study.py <output dir>` (accuracy,
-  NLL, best step, val curve, per-class recall) and write a findings entry:
-  * E-13 → H-9/H-8: does somato_v1 beat no_spatial, pool and the baselines on slide direction?
-  * E-3/E-4 → H-5/H-6/H-7/H-8;
-  * E-1c → choose the learning rate per model for E-2.
-* **Then:** E-2, the main learning curves with 3 seeds and the tuned learning rates (~20 h); then E-5, E-6, E-7.
+  1. Queue v1a: E-3+E-4 (structure ablations; E-13 is done, F-17), until ~06:00.
+  2. Queue v1c, waiting behind it: `validate_mjlab`, then E-19 (brain diagnostics on proxy and terrain, ~2.5 h).
+* **When results land:** run `python scripts/analysis/summarize_study.py <output dir>` and write a findings entry:
+  * E-3/E-4 → H-5/H-6/H-7/H-8 (does stage 2 help on terrain with a pool head? the graph?);
+  * E-19 → choose the stage-3 design (fix the brain or fall back to pooling + memory).
+* **Then:**
+  1. E-1c (lr sweep with the chosen stage 3).
+  2. E-2 (main curves, 3 seeds).
+  3. E-5, E-6, E-7.
 * **Status commands:**
   ```bash
   tail -3 runs/logs/collect_mjlab_v1_2400.log
@@ -49,7 +48,7 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
 | queue v1a | E-13 (slide proxy, ~2 h), then E-3+E-4 (structure ablations, ~5 h) | 2026-10-08 23:10 | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | running (E-13 first) |
-| queue v1b | after v1a: `validate_mjlab` re-run (review fix), then E-1c (fixed FSR, lr 3e-4 / 1e-3 / 3e-3 × 3 models × 10 %/100 %, ~5.5 h) | waiting | `runs/logs/queue_v1b.sh`, log `runs/logs/queue_v1b.log`; outputs `runs/v1/signs_of_life_lr*/` | waiting for v1a |
+| queue v1c | after v1a: `validate_mjlab` re-run (review fix), then E-19 brain diagnostics on the proxy and on terrain at 10 % (~2.5 h) | 2026-10-09 01:55 (waiting) | `runs/logs/queue_v1c.sh`, log `runs/logs/queue_v1c.log`; outputs `runs/v1/e19_brain_proxy/`, `runs/v1/e19_brain_terrain/` | waiting for v1a. (Queue v1b, E-1c, was cancelled before it started: the lr sweep waits for the stage-3 decision.) |
 
 ## 2. Hypotheses and conjectures
 
@@ -70,8 +69,8 @@ point, to be changed only on evidence.
 | H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous, and how much it matters depends on the sensor physics. | no_spatial loses most on FSR (normal-only) and least with shear-sensing taxels. | E-3, E-12 | open (v0 supportive, F0-7) |
 | H-6 | The continuous 3D kernel (weights a function of relative position only) is more data-efficient than feature-dependent graph message passing. | somato_v1 ≥ somato_v1_graph at small data. | E-4 | open |
 | H-7 | Keeping modalities segregated until stage 3 is at least as data-efficient as mixing them in stage 2, and generalizes better: each receptor type keeps its own code, as in the nervous system. | somato_v1 ≥ somato_v1_mixed, especially under shift. | E-3, E-6 | open |
-| H-8 | A dynamic stage 3 (attention at the current body geometry, memory over time) beats static pooling, because a fixed attention pattern does not fit a moving body. | somato_v1 > somato_v1_pool, especially on tasks needing body-wide or temporal integration. | E-3, E-13 | open |
-| H-9 | Stage 2 acting on stage-1 latents, which encode each taxel's recent history, can detect stimuli moving across the skin (e.g. a force sliding along the body in a direction) without an explicit spatio-temporal kernel. | High accuracy on a slide-direction proxy task; it drops without stage 2. | E-13 | open |
+| H-8 | A dynamic stage 3 (attention at the current body geometry, memory over time) beats static pooling, because a fixed attention pattern does not fit a moving body. | somato_v1 > somato_v1_pool, especially on tasks needing body-wide or temporal integration. | E-3, E-13, E-19 | **contradicted so far for the current implementation** (F-17: brain stalls and memorizes; pool 0.98 vs brain 0.25 on the proxy). Diagnosing (E-19); the idea is not refuted, the implementation trains badly. |
+| H-9 | Stage 2 acting on stage-1 latents, which encode each taxel's recent history, can detect stimuli moving across the skin (e.g. a force sliding along the body in a direction) without an explicit spatio-temporal kernel. | High accuracy on a slide-direction proxy task; it drops without stage 2. | E-13 | **supported** (F-17: 0.98 with stage 2 + pool from 84 episodes, 0.45 without stage 2, baselines 0.2–0.54; one seed) |
 | H-10 | Self-supervised objectives (masked sensor prediction, reconstruction, cross-modal prediction) improve data efficiency, more for the structured model, whose stages have natural local objectives. Training stages on their own, with only the last stage task-specific, may generalize better than end-to-end training. | Pretrained + fine-tuned > supervised-only at small data; layer-wise ≥ end-to-end under shift. | E-14, E-15 | open |
 | H-11 | Physical property estimation (friction, compliance/sinkage, roughness) is a better target than Earth class labels for generalization to unknown worlds, and structure helps it too. | Properties transfer to OOD terrains where class labels do not exist; the structured model estimates them better. | E-5, E-7 | open |
 | H-12 | The protocol-v4 budget, max(3,000 steps, 15 epochs), trains every model adequately at every data fraction. | Doubling the budget changes test accuracy by < 1 point. | E-1b | open (v0: 3,000 steps was not enough at full data, F0-11) |
@@ -89,7 +88,8 @@ Avoid very long runs until the earlier steps are sound.
 | # | ID | experiment | purpose / design | config | cost | depends on | status |
 |---|---|---|---|---|---|---|---|
 | 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. | `configs/experiments/v1_signs_of_life.yaml` | ~2 h | T-1, T-6 | done 2026-10-08 (F-14, F-16; FSR bug caveat) |
-| 2 | E-1c | **Baseline fairness / tuning** | E-1 again with the fixed FSR model, learning rate 3e-4 / 1e-3 / 3e-3 for every model; the best lr per model goes into E-2. | queue v1b (`--set base_overrides.train.lr=...`) | ~5.5 h | review fixes | queued (v1b) |
+| 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | queued (v1c) |
+| 2b | E-1c | **Baseline fairness / tuning** | E-1 again with the fixed FSR model, learning rate 3e-4 / 1e-3 / 3e-3 for every model; the best lr per model goes into E-2. | `--set base_overrides.train.lr=...` on `v1_signs_of_life.yaml` | ~5.5 h | E-19 decision | queued |
 | 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
 | 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | to write | ~3 h | E-1 | queued |
 | 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | to write | ~1.5 h | E-1 | queued |
@@ -100,7 +100,7 @@ Avoid very long runs until the earlier steps are sound.
 | 9 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction and compliance ranges, test on the rest (extrapolation). | to write | ~3 h | E-1 | queued |
 | 10 | E-7 | OOD terrains (H-2b, H-11, H-13) | Cold arctic ice, dry sand, gravel (Earth set; Europa deprioritized, Q-2). Evaluate property estimates and class posteriors (open-set). | `collect_mjlab_ood_earth.yaml` | ~2 h | T-9, E-5 | queued |
 | 11 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns at test time; a robot with different link count or taxel density (structured models only, since the baselines are tied to one layout; report this as a qualitative advantage). | to write | < 1 h | E-2 | queued |
-| 12 | E-13 | Slide-direction proxy (H-9, H-8) | A force sliding along or around the body; classify the direction (4-way). somato_v1, no_spatial, pool, flat_gru, transformer at 10 % and 100 % of 840 training episodes. | `configs/experiments/proxy_slide.yaml` | ~2 h | T-12 | queued (ready; a cheap early test of H-9 that could move up the queue) |
+| 12 | E-13 | Slide-direction proxy (H-9, H-8) | A force sliding along or around the body; classify the direction (4-way). somato_v1, no_spatial, pool, flat_gru, transformer at 10 % and 100 % of 840 training episodes. | `configs/experiments/proxy_slide.yaml` | ~2 h | T-12 | done 2026-10-09 (F-17: H-9 supported; the brain head stalls) |
 | 13 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal prediction pretraining, then fine-tune at small data. | to write | ~6 h | T-11 | queued |
 | 14 | E-15 | Layer-wise vs end-to-end (H-10) | Stages trained on their own objectives, frozen, only stage 3 task-specific; vs end-to-end. | to write | ~4 h | T-11 | queued |
 | 15 | E-12 | Sensor technology (H-5) | Ideal + shear, capacitive v1 vs FSR v1 for somato_v1 vs no_spatial vs baselines. | to write | ~3 h | E-1 | queued |

@@ -1,0 +1,50 @@
+# E-19: why does the brain head stall and then memorize on the slide proxy (F-17)? Stage 1 + stage 2 identical (dim 64,
+# no width matching); only stage 3 varies. Run on the slide proxy and on terrain, at the small data fraction where the
+# failure shows (override base_overrides.dataset / fractions for terrain):
+#   python scripts/data_efficiency.py --config configs/experiments/e19_brain_diagnostics.yaml
+#   python scripts/data_efficiency.py --config configs/experiments/e19_brain_diagnostics.yaml \
+#       --set base_overrides.dataset=datasets/mjlab_v1_2400 output_dir=runs/v1/e19_brain_terrain
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  dataset: datasets/proxy_slide_1200
+output_dir: runs/v1/e19_brain_proxy
+fractions: [0.1]
+seeds: [0]
+match_params: false
+save_checkpoints: false
+_somato: &somato
+  architecture: hierarchical
+  dim: 64
+  fusion: segregated
+  brain_stride: 5
+  temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+  spatial:
+    type: kernel3d
+    num_layers: 2
+    edge_features: rel_pos_local
+    length_scale: 0.045
+    graph: {k: 24, radius: 0.045, dynamic: true}
+    params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+  spatial_overrides:
+    joint: {num_layers: 1, length_scale: 0.15, graph: {k: 5, radius: 0.15}}
+    imu: {type: none, num_layers: 1}
+models:
+  pool:            # static mean+max head (solved the proxy, F-17)
+    <<: *somato
+    heads: {terrain: {type: global, pool: meanmax, hidden: 128}}
+  brain:           # somato_v1 as in E-13 (stalled, then memorized)
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true}}
+  brain_norecur:   # without the GRU
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: false}}
+  brain_noattn:    # without the attention layers
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 0, cluster_length_scale: 0.2, recurrent: true}}
+  brain_nodepool:  # with a direct path from the mean/max over all sensors
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true,
+                      node_pool: true}}
+  brain_small:     # less head capacity (memorization hypothesis)
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 64, heads: 4, cluster_layers: 1, cluster_length_scale: 0.2, recurrent: true}}

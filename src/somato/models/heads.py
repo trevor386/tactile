@@ -43,6 +43,7 @@ class HeadConfig:
     recurrent: bool = False
     dropout: float = 0.0
     max_groups: int = 8  # brain head: size of the modality-embedding table (sensor groups in layout order)
+    node_pool: bool = False  # brain head: also feed the mean and max over all sensors (the static pool head's input)
 
 
 def cluster_reduce(h: torch.Tensor, cluster_id: torch.Tensor, num_clusters: int, mask: torch.Tensor | None):
@@ -196,7 +197,7 @@ class BrainHead(nn.Module):
         self.blocks = nn.ModuleList(BiasedSelfAttention(dim, cfg.heads, cfg.dropout) for _ in range(cfg.cluster_layers))
         self.ffns = nn.ModuleList(FeedForward(dim, 2, cfg.dropout) for _ in range(cfg.cluster_layers))
         self.norm = nn.LayerNorm(dim)
-        self.fuse = nn.Sequential(nn.Linear(4 * dim, cfg.hidden), nn.GELU())
+        self.fuse = nn.Sequential(nn.Linear((6 if cfg.node_pool else 4) * dim, cfg.hidden), nn.GELU())
         self.rnn = nn.GRU(cfg.hidden, cfg.hidden, batch_first=True) if cfg.recurrent else None
         self.out = mlp(cfg.hidden, cfg.hidden, cfg.out_dim, layers=2, dropout=cfg.dropout)
 
@@ -221,8 +222,12 @@ class BrainHead(nn.Module):
         for attn, ffn in zip(self.blocks, self.ffns):
             x = ffn(attn(x, bias, valid))
         x = self.norm(x)
-        pooled = torch.cat([masked_mean(x, valid, 1), masked_max(x, valid, 1),
-                            masked_mean(tokens, valid, 1), masked_max(tokens, valid, 1)], -1)
+        pooled = [masked_mean(x, valid, 1), masked_max(x, valid, 1),
+                  masked_mean(tokens, valid, 1), masked_max(tokens, valid, 1)]
+        if self.cfg.node_pool:
+            hn = h.reshape(B * L, N, D)
+            pooled += [masked_mean(hn, mask, 1), masked_max(hn, mask, 1)]
+        pooled = torch.cat(pooled, -1)
         z = self.fuse(pooled).view(B, L, -1)
         new_state = {}
         if self.rnn is not None:
