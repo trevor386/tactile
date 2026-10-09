@@ -6,28 +6,29 @@ MuJoCo-Warp through mjlab, plus a lightweight CPU mock) and the training and eva
 Phase 1 data-efficiency study.
 
 ```
-sensor histories ──► Stage 1: temporal ──► Stage 2: geometric ──► Stage 3: task head ──► terrain class,
- (per sensor,         per-sensor shared     continuous-kernel        cluster attention       slip, ...
-  high rate)          GRU encoder per       convolution over the     between body regions
-                      sensor group          sensor graph (poses)     + task MLP
-                      (no position info)
+sensor histories ──► Stage 1 "receptors" ──► Stage 2 "spinal cord" ──► Stage 3 "brain" ──► terrain class,
+ (per modality,       per-sensor temporal      spatial interaction        region tokens per     properties, ...
+  high rate)          encoder, shared within   *within* each modality:    (modality, body),
+                      a modality, no position  3D kernel over a physical  current-distance
+                                               support radius (current    attention, GRU over
+                                               poses)                     time: modalities meet
 ```
 
-* **Stage 1** (`somato/models/temporal.py`): every sensor of a group (all taxels, all joints, the IMUs)
-  shares one recurrent encoder. It sees only that sensor's own high-rate history (no position) and
-  emits a latent at a lower rate. Options: `conv_gru` (default), `gru`, `receptor`
-  (a mechanoreceptor-like multi-timescale filter bank) and `mlp` (no memory, for ablation).
-* **Stage 2** (`somato/models/spatial.py`): sensors exchange information over a neighbor graph built from
-  their *current* poses. The default operator is a **continuous kernel convolution**: a learned weight
-  field over relative geometry, shared by every sensor (the 3D, irregular-grid analogue of a CNN
-  kernel). Alternatives with the same interface: geometry-biased local attention, EGNN (the Jiang et
-  al. 2025 baseline), full attention, and no interaction.
-* **Stage 3** (`somato/models/heads.py`): pluggable task heads. Pooling ranges from mean/max to attention
-  pooling to cluster attention, where body regions attend to each other with a distance bias.
+* **Stage 1** (`somato/models/temporal.py`): every sensor of a group (all taxels, all joints, the IMU)
+  shares one encoder. It sees only that sensor's own high-rate history (no position) and emits a latent per
+  latent step. Options: `conv_gru` (default), `gru`, `receptor` (SA/RA-like filter bank) and `mlp` (ablation).
+* **Stage 2** (`somato/models/spatial.py`): within each modality only (`fusion: segregated`). The default
+  `kernel3d` is a continuous convolution: a learned kernel over the neighbour's position in the sensor's own
+  frame, with a physical support radius, evaluated at the current poses (the 3D analogue of a CNN kernel). The
+  graph alternatives (`geo_attention`, `egnn`) pass feature-dependent messages on a KNN graph.
+* **Stage 3** (`somato/models/heads.py`, `type: brain`): the modalities meet here. Region tokens attend to each
+  other with a bias from their current distances, then a GRU integrates over brain steps (10 Hz).
 
-The architecture is invariant to the robot's global pose (local-frame edge features). It does not
-depend on the number or arrangement of sensors, so the same weights run on a robot with a different
-sensor layout. Stage 1 runs in streaming mode with exactly the same results as window processing.
+The model is invariant to the robot's global pose and does not depend on the number or arrangement of sensors,
+so the same weights run on another sensor layout. Streaming in chunks gives exactly the window results.
+**Baselines** (`somato/models/baselines.py`): a flat GRU and a transformer over (sensor, time patch) tokens. Both
+get the same kinematics and are width-matched. Design: [docs/architecture.md](docs/architecture.md); plan and
+status: [docs/investigation_log.md](docs/investigation_log.md); results: [docs/findings.md](docs/findings.md).
 
 ## Install
 
@@ -58,13 +59,15 @@ python scripts/train.py --set dataset=datasets/isaac_terrain
 python scripts/isaac/online_demo.py --checkpoint runs/terrain_hierarchical/model.pt --headless
 ```
 
-The same robot, gait and terrains in MuJoCo-Warp (mjlab, separate Python 3.12 env; see
-[docs/mjlab.md](docs/mjlab.md)), and an animation of any collected dataset:
+The primary simulator is MuJoCo-Warp through mjlab (separate Python 3.12 env; see [docs/mjlab.md](docs/mjlab.md)),
+with physical terrain compliance (simulation v1). Version-1 workflow:
 
 ```bash
 python scripts/mjlab/validate_mjlab.py
-python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab.yaml
-python scripts/render_episodes.py datasets/mjlab_terrain --out outputs/mjlab_snake.gif
+python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab_large.yaml   # 2400 episodes
+python scripts/train.py --config configs/experiments/terrain_v1.yaml                           # somato_v1
+python scripts/data_efficiency.py --config configs/experiments/v1_signs_of_life.yaml           # vs. baselines
+python scripts/render_episodes.py datasets/mjlab_v1_2400 --out outputs/mjlab_snake.gif
 ```
 
 ## What is swappable, and where
@@ -74,7 +77,7 @@ python scripts/render_episodes.py datasets/mjlab_terrain --out outputs/mjlab_sna
 | Tactile technology (FSR, capacitive, binary, ideal), IMU and motor models | `configs/sensors/*.yaml` | `somato/sensors/` (`@SENSOR_MODELS.register`) |
 | Robot and sensor geometry | `configs/robots/*.yaml` (snake generator or any URDF + placement generators) | `somato/robots/`, `somato/geometry/generators.py` |
 | Stage 1 / 2 / 3 variants | `configs/models/*.yaml` | registries in `somato/models/` |
-| Terrain classes | `configs/terrains/ice_forms.yaml` | `somato/sim/terrain.py` |
+| Terrain classes | `configs/terrains/ice_snow_v1.yaml` (v0: `ice_forms.yaml`) | `somato/sim/terrain.py` |
 | Simulator | implement `SimBackend` | `somato/sim/backend.py` (mock, Isaac Lab, mjlab) |
 | Data source at runtime | sim, replay or hardware | `somato/sources/` (`HardwareSource` template) |
 
@@ -106,7 +109,8 @@ src/somato/
 configs/        robots, sensors, terrains, models, experiments
 scripts/        collect / train / data_efficiency / validate (+ scripts/isaac/*)
 tests/          unit and integration tests (incl. a fake isaaclab module for the Isaac adapter)
-docs/           architecture.md, isaac_sim.md
+docs/           architecture.md, investigation_log.md (plan), findings.md (results), mjlab.md, isaac_sim.md,
+                references/ (literature), archive/ (version 0, with caveats)
 ```
 
 See [docs/architecture.md](docs/architecture.md) for design decisions and the mapping to the research

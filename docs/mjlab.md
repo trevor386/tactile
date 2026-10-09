@@ -34,9 +34,12 @@ python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab
 3. Ground: mjlab's `TerrainEntityCfg(terrain_type="plane")` (body and geom `terrain`). Robot geoms get
    `priority = 1`, so their friction and `solref` override the plane's; MuJoCo otherwise combines two
    geoms' friction with **max**, which would make every env behave like the plane (mu = 1).
-4. Per-env terrain: `geom_friction` is expanded to one copy per world and the robot geoms' sliding
-   friction is written per env on reset. MuJoCo has **no restitution coefficient and no static/dynamic
-   friction split**, so `restitution` and Isaac's `static_friction_ratio` have no counterpart.
+4. Per-env terrain (simulation v1, `terrain_compliance: true`, the default): robot-ground contacts are explicit
+   contact pairs, one per robot geom (the robot geoms' own collisions are disabled). `pair_friction`, `pair_solref`
+   and `pair_solimp` are expanded to one copy per world and written per env on reset from the sampled terrain. See
+   "Terrain compliance" below. With `terrain_compliance: false` (v0), `geom_friction` is expanded instead and only
+   friction varies. MuJoCo has **no restitution coefficient and no static/dynamic friction split**, so
+   `restitution` and Isaac's `static_friction_ratio` have no counterpart (the damping ratio plays restitution's role).
 5. Contacts: one `ContactSensorCfg` (MuJoCo's native `mjSENS_CONTACT`) over all links against the
    terrain with `reduce="netforce"`: per link, the summed contact force in the world frame and the
    force-weighted contact centroid. The sensor reports the force exerted **by the link on the ground**:
@@ -57,7 +60,41 @@ python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab
   constraints (only a device `printf` per step).
 * Newton, 20 iterations, 10 line-search iterations, dt = 1 ms.
 
-## Validation results (10 envs, `collect_mjlab.yaml`)
+## Terrain compliance (simulation v1)
+
+Soft terrain must be *physically* soft: the robot sinks into snow, the footprint on the skin widens and impacts are
+damped. In v0 this was faked by a constant offset in the taxel model. A plain soft geom contact is not the answer
+either: MuJoCo applies one solref to the normal and the friction rows, so softening the contact also softened
+friction, and locomotion stopped depending on friction (speed-friction r 0.04, see below).
+
+Explicit contact pairs separate the two:
+* the **normal** row gets the terrain's softness:
+  * `solref` time constant and damping ratio (`contact_timeconst`, `contact_dampratio`);
+  * an impedance profile `solimp = (dmin, 0.95, width, 0.5, 2)` (`contact_dmin`, `contact_width`): low impedance at
+    the surface rising over a transition depth, i.e. a ground that yields quickly and stiffens with depth;
+* the **friction** rows keep a stiff `solreffriction` (`friction_solref`, 0.02 s).
+
+Calibration (`scripts/mjlab/calibrate_compliance.py`, findings F-6, F-7, F-10), with resting and moving sinkage of the
+loaded capsules:
+
+| setting (τ, dmin, width) | rest | moving | flicker |
+|---|---|---|---|
+| 0.02, 0.9, 1 mm (hard ground) | 0.05 mm | 0.5–0.8 mm | ~3 % (bounce) |
+| 0.02, 0.5, 5 mm | 0.8 mm | 1.0–1.4 mm | < 1 % |
+| 0.02, 0.3, 15 mm | 2.5 mm | 2.3–2.7 mm | < 0.2 % |
+| 0.02, 0.02, 50 mm | 13.8 mm | ~10 mm | 0 |
+| 0.06, 0.02, 50 mm | 21 mm | ~12 mm | 0 |
+
+Speed keeps increasing with friction on soft ground (r 0.67–0.81 over μ 0.1–0.6). The time constant alone is a poor
+compliance knob: it gives deep resting sinkage but responds slowly, so a moving robot barely sinks (0.9 mm moving
+vs 5.4 mm at rest at τ 0.2 s). Hard-ground damping ratios of 0.15–0.3 (bouncy skin, as the literature suggests) are
+stable but raise one-step flicker to 3–10 %; catalog v1 uses 0.2–0.4. `impratio` (elliptic cones) made no difference.
+
+The catalog (`configs/terrains/ice_snow_v1.yaml`) maps the literature ranges (`docs/references/terrain_physics_v2.md`)
+onto these parameters. Validation: 15/15. Static rigid-support checks run on the stiffest class; the check
+`soft_terrain_sinks_deeper` gives 11 mm on fresh snow vs 0.0 mm on concrete.
+
+## Validation results (v0 setup: 10 envs, `configs/archive/v0/experiments/collect_mjlab.yaml`)
 
 | check | mjlab | Isaac Sim 5.1 | criterion |
 |---|---|---|---|

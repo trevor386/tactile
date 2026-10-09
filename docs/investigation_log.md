@@ -9,10 +9,10 @@ caveats). Design: `docs/architecture.md`. Simulators: `docs/mjlab.md`, `docs/isa
 Item IDs are stable: H = hypothesis, E = experiment, T = task (code or setup), Q = question for the user, D = decision.
 Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-08 ~22:10)
+## RESUME HERE (state as of 2026-10-08 ~21:20)
 
 * **Running:** E-1, signs of life (log `runs/logs/v1_signs_of_life.log`, output `runs/v1/signs_of_life/`), started
-  ~22:05. Order: the 10 % fraction (somato_v1, flat_gru, transformer), then 100 %. About 2.5 h.
+  21:09. Order: the 10 % fraction (somato_v1, flat_gru, transformer), then 100 %. About 2 h (done ~23:00).
 * **Next:** while E-1 runs, T-2 to T-5 (docs, independent code review). When E-1 lands, analyse it (findings entry):
   * accuracy vs the Bayes ceilings (F-13: 0.92 noisy, 0.98 exact);
   * per-class recall (expect glare ice ↔ concrete confusions);
@@ -46,7 +46,7 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
-| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 22:05 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running (first eval: somato_v1 val 0.49 at 250 steps, no plateau) |
+| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running (first eval: somato_v1 val 0.49 at 250 steps, no plateau) |
 
 ## 2. Hypotheses and conjectures
 

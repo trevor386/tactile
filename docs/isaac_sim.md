@@ -37,7 +37,10 @@ Practical notes:
   0.5 s after "app ready", also for Isaac Lab's empty-scene tutorial). This is a known Isaac Sim 5.1
   issue with the R590 driver branch; 5.1 is validated with the 580 production driver. Headless physics
   is unaffected. Without a GUI, `scripts/render_episodes.py` animates collected episodes from the
-  stored body poses.
+  stored body poses. **Update 2026-10-08:** the machine now runs driver 580.178 (kernel 7.0.0-38), the validated
+  branch, so the GUI may work again. Isaac has not been re-run on it yet (task T-10 in `investigation_log.md`).
+* Simulation v1 (physical terrain compliance) exists only in the mjlab backend so far. Isaac datasets use the v0
+  terrain model until PhysX compliant contacts are wired up for sim-to-sim tests (T-10).
 
 ## How the scene is built (`somato/sim/isaaclab/scene.py`)
 
