@@ -1,0 +1,18 @@
+# E-3 + E-4: what each imposed structure contributes, within the somato family (same stage 1, same inputs, widths
+# matched to somato_v1), at 10 % and 100 % of the training episodes, seed 0.
+#   no_spatial (H-5): no stage-2 interaction;  mixed (H-7): modalities mixed in stage 2 (v0 style);
+#   pool (H-8): static mean+max head instead of the brain;  graph (H-6): KNN message passing instead of the 3D kernel.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_structure_ablations.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/structure_ablations
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: true
+reference_model: somato_v1
+models:
+  somato_v1: configs/models/somato_v1.yaml
+  somato_v1_no_spatial: configs/models/somato_v1_no_spatial.yaml
+  somato_v1_mixed: configs/models/somato_v1_mixed.yaml
+  somato_v1_pool: configs/models/somato_v1_pool.yaml
+  somato_v1_graph: configs/models/somato_v1_graph.yaml
