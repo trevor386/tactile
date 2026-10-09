@@ -1,58 +1,91 @@
-"""Bayes-optimal terrain-classification accuracy from the terrain catalog alone.
+"""Best achievable terrain-classification accuracy from the terrain catalog alone (Bayes ceiling).
 
-    python scripts/analysis/task_ceiling.py [--terrains configs/terrains/ice_forms.yaml]
+    python scripts/analysis/task_ceiling.py [--terrains configs/terrains/ice_snow_v1.yaml] [--texture_filter 0.0035]
 
-Episodes sample every terrain parameter uniformly within their class's range, so with *perfect* knowledge of a
-subset of parameters the best possible classifier picks the class of highest density at the observed values.
-This gives the ceiling a model can reach if it infers those parameters exactly: e.g. friction alone (what
-proprioception and locomotion reveal) vs. friction + sinkage/texture (what the tactile model adds).
+Episodes sample every terrain parameter uniformly within their class's range, so a model that inferred some of the
+parameters *exactly* could at best pick the most probable class given them. That ceiling is estimated here by
+nearest-neighbour classification of a large sample of parameter vectors (k-NN converges to the Bayes rate), for
+subsets of what the robot can sense:
+
+* friction (proprioception, shear/normal ratios, locomotion);
+* compliance (sinkage, pressure level, impact response): the soft-contact parameters of simulation v1;
+* felt roughness: texture amplitude x the skin's attenuation at the texture wavelength (exp(-(2 pi/lambda)^2 sigma^2 / 2));
+  texture finer than the skin can resolve counts as absent.
+
+"exact" assumes perfect inference of those quantities (a loose upper bound); "noisy" adds the observation noise given
+by --noise (relative, per feature: an assumption about how well 0.5 s of sensing pins them down).
 """
 
 import argparse
+import math
 
 import torch
 
-from somato.sim.terrain import TerrainCatalog, default_catalog_path
+from somato.sim.terrain import TerrainCatalog
 
-SUBSETS = {
-    "friction only": ["friction"],
-    "friction + sinkage": ["friction", "sinkage"],
-    "mjlab-enacted (friction, sinkage, texture amp/wavelength)": ["friction", "sinkage", "texture_amp",
-                                                                  "texture_wavelength"],
-    "Isaac-enacted (+ restitution)": ["friction", "sinkage", "texture_amp", "texture_wavelength", "restitution"],
-}
+COMPLIANCE = ["contact_dmin", "contact_width", "contact_timeconst", "contact_dampratio"]
 
 
-def bayes_accuracy(catalog: TerrainCatalog, dims: list[str], n: int = 200_000, seed: int = 0) -> float:
-    gen = torch.Generator().manual_seed(seed)
-    classes = catalog.classes
-    K = len(classes)
-    cls = torch.randint(K, (n,), generator=gen)
-    logp = torch.zeros(n, K)
-    for d in dims:
-        lo = torch.tensor([getattr(c, d)[0] for c in classes])
-        hi = torch.tensor([getattr(c, d)[1] for c in classes])
-        theta = lo[cls] + (hi[cls] - lo[cls]) * torch.rand(n, generator=gen)
-        for k in range(K):
-            width = float(hi[k] - lo[k])
-            if width > 0:
-                inside = (theta >= lo[k]) & (theta <= hi[k])
-                logp[:, k] += torch.where(inside, -torch.log(torch.tensor(width)), torch.tensor(-1e9))
-            else:
-                logp[:, k] += torch.where((theta - lo[k]).abs() < 1e-12, 0.0, -1e9)
-    ties = (logp >= logp.max(1, keepdim=True).values - 1e-9).float()  # random tie-break
-    pred = torch.multinomial(ties, 1, generator=gen).squeeze(1)
-    return float((pred == cls).float().mean())
+def sample_features(catalog: TerrainCatalog, n: int, sigma: float, gen: torch.Generator) -> tuple[dict, torch.Tensor]:
+    cls = torch.randint(len(catalog), (n,), generator=gen)
+    batch = catalog.sample(cls, gen)
+    p = batch.params
+    lam = p["texture_wavelength"]
+    felt = p["texture_amp"] * torch.exp(-0.5 * (2 * math.pi / lam * sigma) ** 2)
+    feats = {"friction": p["friction"], "felt_roughness": felt, "sinkage(v0)": p["sinkage"]}
+    for k in COMPLIANCE:
+        feats[k] = p[k]
+    return feats, cls
+
+
+def knn_accuracy(train: torch.Tensor, ytr: torch.Tensor, test: torch.Tensor, yte: torch.Tensor, k: int = 25,
+                 num_classes: int = 5) -> float:
+    mu, sd = train.mean(0), train.std(0).clamp_min(1e-9)
+    train, test = (train - mu) / sd, (test - mu) / sd
+    correct = 0
+    for chunk in torch.split(torch.arange(len(test)), 2048):
+        d = torch.cdist(test[chunk], train)
+        idx = d.topk(k, largest=False).indices
+        votes = torch.zeros(len(chunk), num_classes).scatter_add_(1, ytr[idx], torch.ones_like(idx, dtype=torch.float))
+        correct += int((votes.argmax(1) == yte[chunk]).sum())
+    return correct / len(test)
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--terrains", default=default_catalog_path())
-    args = parser.parse_args()
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--terrains", default="configs/terrains/ice_snow_v1.yaml")
+    p.add_argument("--texture_filter", type=float, default=0.0035, help="skin aperture sigma [m] (0: unfiltered)")
+    p.add_argument("--noise", type=float, default=0.15, help="relative observation noise for the 'noisy' ceiling")
+    p.add_argument("--n", type=int, default=40000)
+    args = p.parse_args()
     catalog = TerrainCatalog.from_yaml(args.terrains)
-    print(f"classes: {catalog.names}")
-    for label, dims in SUBSETS.items():
-        print(f"  {label:60s} {bayes_accuracy(catalog, dims):.3f}")
+    gen = torch.Generator().manual_seed(0)
+    ftr, ytr = sample_features(catalog, args.n, args.texture_filter, gen)
+    fte, yte = sample_features(catalog, args.n // 4, args.texture_filter, gen)
+    # A constant parameter has a ~1e-8 float32 spread; standardizing it would turn rounding into a noise feature.
+    varies = lambda keys: [k for k in keys if float(ftr[k].std()) > 1e-6 * float(ftr[k].abs().mean()) + 1e-12]  # noqa: E731
+    subsets = {
+        "friction only": ["friction"],
+        "compliance only": COMPLIANCE + ["sinkage(v0)"],
+        "felt roughness only": ["felt_roughness"],
+        "friction + compliance": ["friction", "sinkage(v0)"] + COMPLIANCE,
+        "friction + compliance + felt roughness": ["friction", "sinkage(v0)", "felt_roughness"] + COMPLIANCE,
+    }
+    print(f"classes: {catalog.names}; skin sigma {args.texture_filter * 1e3:.1f} mm; noisy = {args.noise:.0%} noise")
+    for label, keys in subsets.items():
+        keys = varies(keys)
+        if not keys:
+            print(f"  {label:42s} (no varying parameter)")
+            continue
+        tr = torch.stack([ftr[k] for k in keys], -1)
+        te = torch.stack([fte[k] for k in keys], -1)
+        exact = knn_accuracy(tr, ytr, te, yte, num_classes=len(catalog))
+        g2 = torch.Generator().manual_seed(1)
+        scale = tr.abs().mean(0)  # noise relative to each feature's typical magnitude
+        noisy = knn_accuracy(tr + args.noise * scale * torch.randn(tr.shape, generator=g2), ytr,
+                             te + args.noise * scale * torch.randn(te.shape, generator=g2), yte,
+                             num_classes=len(catalog))
+        print(f"  {label:42s} exact {exact:.3f}   noisy {noisy:.3f}   ({', '.join(keys)})")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,8 @@
 
 Documents and configs from the first prototype and its experiments. They are kept as a reference, but **none of
 the results test the hypothesis as intended**. The setup differed from the research intent in the ways listed
-below; the current plan is in `docs/research_plan.md`, the current log in `docs/investigation_log.md`.
+below. The current plan (hypotheses, experiment queue, tasks) is in `docs/investigation_log.md`, the findings in
+`docs/findings.md` (which also summarizes these v0 experiments).
 
 | file | what it is |
 |---|---|

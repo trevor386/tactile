@@ -1,7 +1,7 @@
 # Architecture review: what the v0 code does (2026-10-08) — ARCHIVED
 
 > **Archived 2026-10-08.** This review motivated version 1; the issues it lists are addressed (or tracked) in
-> `docs/research_plan.md`.
+> `docs/investigation_log.md` (tasks T-1 to T-8 and the hypotheses).
 
 A snapshot for checking design decisions against the research intent. It describes the code as of commit
 `d58b156`, not the original plan. Section 5 lists the places where the two may differ.
