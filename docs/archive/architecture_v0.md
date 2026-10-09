@@ -1,4 +1,8 @@
-# Architecture and design decisions
+# Architecture and design decisions (v0) — ARCHIVED
+
+> **Archived 2026-10-08.** Describes the v0 code. Version 1 keeps modalities segregated through stage 2, defines
+> the stage-2 kernel by a physical support radius, replaces the mean+max head with a multimodal "brain" stage, and
+> changes the simulation; see `docs/architecture.md` and `docs/archive/README.md`.
 
 This document maps the research plan (hierarchical somatosensory encoder, Phase 1) onto the code
 and records the choices made in the first prototype, so they can be revisited deliberately.

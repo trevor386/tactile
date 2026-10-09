@@ -1,4 +1,9 @@
-# Investigation log (Phase 1)
+# Investigation log (Phase 1, v0) — ARCHIVED
+
+> **Archived 2026-10-08.** These experiments used the v0 model (modalities mixed in stage 2), v0 baselines (flat
+> GRU without kinematics) and the v0 simulation (synthetic sinkage, unfiltered texture, near-melting friction). Read
+> `docs/archive/README.md` for the caveats before using any number here. The "RESUME HERE" section and task queue
+> below are obsolete; the current ones are in `docs/investigation_log.md`.
 
 Running notes for the Phase 1 question: what inductive bias (structure) suits distributed tactile +
 proprioceptive sensing, and does the somatosensory-inspired hierarchy (per-sensor temporal encoder →
