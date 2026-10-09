@@ -1,0 +1,8 @@
+# flat_gru.yaml with every raw sample instead of hand-made per-step statistics (the MLP learns its own features;
+# no noise-sensitive std features), plus kinematics.
+architecture: flat_recurrent
+hidden: 128
+chunk_features: flatten
+kinematics: true
+heads:
+  terrain: {type: global}

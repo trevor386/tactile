@@ -1,6 +1,7 @@
 # Hierarchical encoder with a mean+max pooling head instead of cluster attention (stage 3 variant). The
 # cluster-attention head starts on a ~150-200 step loss plateau; this head trains from the first steps.
 architecture: hierarchical
+fusion: mixed  # v0: one stage-2 graph over all sensor groups
 dim: 64
 temporal:
   type: conv_gru

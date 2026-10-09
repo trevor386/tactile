@@ -37,9 +37,10 @@ class OnlineEncoder:
         self.sensor_state = None
         self.history: list[SomatoBatch] = []
         self.latency_ms: list[float] = []
+        self.last_outputs: dict[str, torch.Tensor] = {}
 
     def reset(self) -> None:
-        self.state, self.sensor_state, self.history = None, None, []
+        self.state, self.sensor_state, self.history, self.last_outputs = None, None, [], {}
 
     @torch.no_grad()
     def step(self, frame: SourceFrame) -> dict[str, torch.Tensor]:
@@ -64,4 +65,6 @@ class OnlineEncoder:
         if self.device.type == "cuda":
             torch.cuda.synchronize()
         self.latency_ms.append(1e3 * (time.perf_counter() - t0))
-        return {k: v[:, -1] for k, v in outputs.items()}
+        if outputs:  # models with brain_stride > 1 predict only at brain steps; hold the last prediction between them
+            self.last_outputs = {k: v[:, -1] for k, v in outputs.items()}
+        return self.last_outputs

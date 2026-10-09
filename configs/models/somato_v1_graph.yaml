@@ -1,0 +1,21 @@
+# Version 1 with the *graph* approach to stage 2 instead of the 3D kernel: message passing on a k-nearest-neighbour
+# graph (rebuilt from the current pose), where each message depends on both endpoints' features and on the edge
+# geometry (local attention with a relative-position bias and a learnable distance prior). Everything else as in
+# somato_v1.yaml.
+architecture: hierarchical
+dim: 64
+fusion: segregated
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial:
+  type: geo_attention
+  num_layers: 2
+  edge_features: rel_pos_local
+  length_scale: 0.045
+  graph: {k: 12, dynamic: true}
+  params: {heads: 4}
+spatial_overrides:
+  joint: {num_layers: 1, length_scale: 0.15, graph: {k: 3}}
+  imu: {type: none, num_layers: 1}
+heads:
+  terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true}

@@ -1,6 +1,7 @@
 # Structure spectrum, "arbitrary transformer": shared stage 1, global self-attention over all sensors with an absolute
 # sensor-ID embedding and NO geometry (the network must learn sensor relations from data), mean+max head.
 architecture: hierarchical
+fusion: mixed  # v0: one stage-2 graph over all sensor groups
 dim: 64
 temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
 spatial: {type: full_attention, num_layers: 2, edge_features: none, params: {heads: 4}}

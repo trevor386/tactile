@@ -1,0 +1,19 @@
+# Ablation of somato_v1.yaml with a static stage 3: mean+max pooling over all sensors and an MLP at each step (no
+# region tokens, no geometry-aware attention, no memory after stage 2; the version-0 head). Tests the brain stage.
+architecture: hierarchical
+dim: 64
+fusion: segregated
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial:
+  type: kernel3d
+  num_layers: 2
+  edge_features: rel_pos_local
+  length_scale: 0.045
+  graph: {k: 24, radius: 0.045, dynamic: true}
+  params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+spatial_overrides:
+  joint: {num_layers: 1, length_scale: 0.15, graph: {k: 5, radius: 0.15}}
+  imu: {type: none, num_layers: 1}
+heads:
+  terrain: {type: global, pool: meanmax, hidden: 128}

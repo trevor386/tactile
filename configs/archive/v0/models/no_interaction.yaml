@@ -1,5 +1,6 @@
 # Ablation: same stage 1 and head, but sensors never interact in stage 2 (no geometry).
 architecture: hierarchical
+fusion: mixed  # v0: one stage-2 graph over all sensor groups
 dim: 64
 temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
 spatial: {type: none, num_layers: 2}

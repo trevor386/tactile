@@ -10,6 +10,9 @@ step at a time). Pooling options, from least to most structured:
   layers between clusters with a relative-distance bias -> pooled. This is the "global attention"
   stage of the proposal, where distant regions can influence each other.
 
+The ``brain`` head (stage 3 of the segregated model) is where sensor groups first meet: per-(group, body) region
+tokens, attention biased by their *current* distances, and a memory over brain steps (see :class:`BrainHead`).
+
 Heads may optionally carry their own recurrent state across steps (``recurrent: true``).
 """
 
@@ -22,6 +25,7 @@ from torch import nn
 
 from somato.geometry.layout import LayoutInfo
 from somato.models.common import BiasedSelfAttention, FeedForward, masked_max, masked_mean, masked_softmax, mlp
+from somato.models.graph import pairwise_sq_distance
 from somato.utils.registry import Registry
 
 HEADS: Registry[nn.Module] = Registry("head")
@@ -38,6 +42,7 @@ class HeadConfig:
     cluster_length_scale: float = 0.2  # m, scale of the inter-cluster distance bias
     recurrent: bool = False
     dropout: float = 0.0
+    max_groups: int = 8  # brain head: size of the modality-embedding table (sensor groups in layout order)
 
 
 def cluster_reduce(h: torch.Tensor, cluster_id: torch.Tensor, num_clusters: int, mask: torch.Tensor | None):
@@ -114,6 +119,7 @@ class GlobalHead(nn.Module):
             self.pool, pooled = None, 2 * dim
         else:
             raise ValueError(f"Unknown pool '{cfg.pool}'")
+        self.recurrent = cfg.recurrent
         self.rnn = nn.GRU(pooled, pooled, batch_first=True) if cfg.recurrent else None
         self.out = mlp(pooled, cfg.hidden, cfg.out_dim, layers=2, dropout=cfg.dropout)
 
@@ -144,6 +150,86 @@ class GlobalHead(nn.Module):
             pooled, hn = self.rnn(pooled, state["h"])
             new_state = {"h": hn}
         return self.out(pooled), new_state
+
+
+def region_tokens(info: LayoutInfo) -> tuple[torch.Tensor, torch.Tensor]:
+    """Region of every node and group of every region: one region per (sensor group, body) pair that has sensors.
+
+    Returns ``(region_id [N], region_group [R])``; regions are ordered by group (layout order), then body.
+    """
+    if "regions" not in info.cache:
+        nb = int(info.body_index.max()) + 1
+        key = info.group_id.long() * nb + info.body_index.long()
+        uniq, region = torch.unique(key, sorted=True, return_inverse=True)
+        info.cache["regions"] = (region, torch.div(uniq, nb, rounding_mode="floor"))
+    return info.cache["regions"]
+
+
+@HEADS.register("brain")
+class BrainHead(nn.Module):
+    """Stage 3 ("brain"): fuses the sensor groups across the whole body, with dynamic geometry and memory.
+
+    1. **Region tokens.** Stage-2 features are pooled (masked mean and max) per (group, body) region, e.g. one
+       tactile token per link, one token per joint sensor and one IMU token, and get a learned embedding of their
+       group. Modalities first meet here.
+    2. **Dynamic geometry.** A token sits at the current centroid of its sensors; each attention head adds a learned
+       function of the current pairwise token distance to its logits. The attention pattern therefore follows the
+       body as it moves; there is no fixed map and no per-region identity, so one set of weights runs on robots with
+       other link counts.
+    3. **Global attention** layers over the tokens, then masked mean and max over the tokens, concatenated with the
+       mean and max of the input tokens. That short path trains from the first steps (attention-only pooling
+       started on a long loss plateau).
+    4. **Memory.** With ``recurrent: true`` (intended for this head), a GRU over brain steps; then an MLP to the
+       output.
+
+    Config: ``hidden`` (fused width), ``heads``, ``cluster_layers`` (attention layers), ``cluster_length_scale``
+    (distance unit of the bias), ``max_groups``.
+    """
+
+    def __init__(self, dim: int, cfg: HeadConfig):
+        super().__init__()
+        self.cfg, self.recurrent = cfg, cfg.recurrent
+        self.token = nn.Linear(2 * dim, dim)
+        self.group_embed = nn.Embedding(cfg.max_groups, dim)
+        nn.init.zeros_(self.group_embed.weight)
+        self.dist_bias = mlp(1, 32, cfg.heads, layers=2)
+        self.blocks = nn.ModuleList(BiasedSelfAttention(dim, cfg.heads, cfg.dropout) for _ in range(cfg.cluster_layers))
+        self.ffns = nn.ModuleList(FeedForward(dim, 2, cfg.dropout) for _ in range(cfg.cluster_layers))
+        self.norm = nn.LayerNorm(dim)
+        self.fuse = nn.Sequential(nn.Linear(4 * dim, cfg.hidden), nn.GELU())
+        self.rnn = nn.GRU(cfg.hidden, cfg.hidden, batch_first=True) if cfg.recurrent else None
+        self.out = mlp(cfg.hidden, cfg.hidden, cfg.out_dim, layers=2, dropout=cfg.dropout)
+
+    def init_state(self, batch: int, device) -> dict:
+        if self.rnn is None:
+            return {}
+        return {"h": torch.zeros(1, batch, self.rnn.hidden_size, device=device)}
+
+    def forward(self, h: torch.Tensor, pos: torch.Tensor, info: LayoutInfo, node_mask: torch.Tensor | None,
+                state: dict | None = None) -> tuple[torch.Tensor, dict]:
+        B, L, N, D = h.shape
+        region, region_group = region_tokens(info)
+        R = region_group.shape[0]
+        mask = None if node_mask is None else node_mask[:, None].expand(B, L, N).reshape(B * L, N)
+        mean, mx, count = cluster_reduce(h.reshape(B * L, N, D), region, R, mask)
+        tokens = self.token(torch.cat([mean, mx], -1)) + self.group_embed(region_group.to(h.device))
+        cpos, _, _ = cluster_reduce(pos.reshape(B * L, N, 3), region, R, mask)  # current region centroids
+        valid = count > 0
+        d = pairwise_sq_distance(cpos).clamp_min(0).sqrt() / self.cfg.cluster_length_scale
+        bias = self.dist_bias(d.unsqueeze(-1).to(tokens.dtype)).permute(0, 3, 1, 2)  # [BL, H, R, R]
+        x = tokens
+        for attn, ffn in zip(self.blocks, self.ffns):
+            x = ffn(attn(x, bias, valid))
+        x = self.norm(x)
+        pooled = torch.cat([masked_mean(x, valid, 1), masked_max(x, valid, 1),
+                            masked_mean(tokens, valid, 1), masked_max(tokens, valid, 1)], -1)
+        z = self.fuse(pooled).view(B, L, -1)
+        new_state = {}
+        if self.rnn is not None:
+            state = state or self.init_state(B, h.device)
+            z, hn = self.rnn(z, state["h"])
+            new_state = {"h": hn}
+        return self.out(z), new_state
 
 
 @HEADS.register("per_body")

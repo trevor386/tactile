@@ -1,0 +1,14 @@
+# Signs of life for version 1 (simulation v1, sensor model v1, model v1, protocol v4): the structured model against
+# both unstructured baselines, at 10 % and 100 % of the training episodes, one seed, widths matched to somato_v1.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_signs_of_life.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/signs_of_life
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: true
+reference_model: somato_v1
+models:
+  somato_v1: configs/models/somato_v1.yaml
+  flat_gru: configs/models/flat_gru.yaml
+  transformer: configs/models/transformer.yaml

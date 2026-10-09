@@ -1,0 +1,12 @@
+# Least-structured baseline: a transformer over (sensor, 100 ms time patch) tokens of every modality. Each token
+# embeds one sensor's raw samples, plus its current position and normal in the robot (IMU) frame (kinematics), its
+# group and its time patch; global self-attention over all sensors, modalities and time; class-token readout.
+# No locality, no hierarchy, no modality segregation.
+architecture: transformer
+dim: 64
+layers: 4
+attn_heads: 4
+patch_steps: 5
+pos_bands: 4
+heads:
+  terrain: {type: global, hidden: 128}

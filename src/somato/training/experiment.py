@@ -20,7 +20,7 @@ from somato.sim.runner import RateConfig
 from somato.training.prepare import AugmentConfig, BatchPreparer
 from somato.training.tasks import ClassificationTask, build_tasks
 from somato.training.trainer import Trainer, TrainConfig, resolve_device, save_checkpoint
-from somato.utils.config import from_dict, load_yaml, to_dict
+from somato.utils.config import deep_merge, from_dict, load_yaml, to_dict
 from somato.utils.seeding import seed_everything
 
 
@@ -62,13 +62,7 @@ class ExperimentConfig:
 
 
 def deep_update(base: dict, upd: dict) -> dict:
-    out = copy.deepcopy(base)
-    for k, v in upd.items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = deep_update(out[k], v)
-        else:
-            out[k] = v
-    return out
+    return deep_merge(copy.deepcopy(base), upd)
 
 
 def group_specs(store: EpisodeStore, suite: SensorSuite | None) -> dict[str, GroupSpec]:
@@ -176,7 +170,14 @@ def load_trained_model(path: str | Path, map_location="cpu", info: LayoutInfo | 
     """
     ckpt = torch.load(path, map_location=map_location, weights_only=False)
     groups = {k: GroupSpec(**v) for k, v in ckpt["groups"].items()}
-    cfg = parse_model_config(ckpt["model_cfg"])
+    model_cfg = dict(ckpt["model_cfg"])
+    # Checkpoints from before version 1 predate these keys and were trained with the version-0 behaviour.
+    arch = model_cfg.get("architecture", "hierarchical")
+    if arch == "hierarchical":
+        model_cfg.setdefault("fusion", "mixed")
+    elif arch == "flat_recurrent":
+        model_cfg.setdefault("kinematics", False)
+    cfg = parse_model_config(model_cfg)
     if cfg.architecture != "hierarchical" and info is None:
         raise ValueError(f"'{cfg.architecture}' models are tied to a sensor layout: pass the LayoutInfo")
     model = build_model(cfg, groups, info)

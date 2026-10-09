@@ -3,7 +3,7 @@ name: terrain_hierarchical
 dataset: datasets/mock_terrain
 output_dir: runs
 sensors: configs/sensors/fsr.yaml
-model: configs/models/hierarchical.yaml
+model: configs/models/somato_v1.yaml
 tasks:
   terrain: {type: classification, label: terrain}
 window: 25          # 0.5 s windows at 50 Hz

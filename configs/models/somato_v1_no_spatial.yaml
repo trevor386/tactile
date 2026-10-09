@@ -1,0 +1,10 @@
+# Ablation of somato_v1.yaml without stage-2 spatial interaction: every sensor's latent goes straight to the brain
+# (a per-sensor feed-forward block keeps the depth comparable). Isolates what the spatial inductive bias adds.
+architecture: hierarchical
+dim: 64
+fusion: segregated
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial: {type: none, num_layers: 2}
+heads:
+  terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true}

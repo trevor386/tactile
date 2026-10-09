@@ -1,5 +1,6 @@
 # Unstructured baseline: all sensor readings flattened into one vector per latent step -> MLP -> GRU.
 architecture: flat_recurrent
+kinematics: false  # v0: no body poses
 hidden: 128
 chunk_features: stats
 heads:

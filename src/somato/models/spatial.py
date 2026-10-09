@@ -46,9 +46,17 @@ class SpatialContext:
 # ---------------------------------------------------------------------------------------- layers
 
 
+@SPATIAL_LAYERS.register("kernel3d")
 @SPATIAL_LAYERS.register("continuous_conv")
 class ContinuousConvBlock(nn.Module):
-    """Continuous kernel convolution + feed-forward, pre-norm residual.
+    """Continuous kernel convolution + feed-forward, pre-norm residual (registered as ``kernel3d``).
+
+    The 3D-kernel approach to stage 2: a CNN kernel made continuous in space. Its *support* is the set of
+    neighbours, best given as a physical radius (``graph.radius``, with ``graph.k`` only a cap), and its weights are
+    a learned function of where the neighbour sits in sensor i's frame, evaluated at the current poses: when the
+    body bends, sensors on adjacent links move relative to each other, so both the support and the kernel weights
+    follow the motion. The alternative, graph approach is message passing on a neighbour graph whose messages also
+    depend on the features (``geo_attention``, ``egnn``).
 
     Args:
         aggregation: ``mean`` (normalize by neighbor count), ``sum``, or ``area`` -- weight each

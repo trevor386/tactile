@@ -1,0 +1,9 @@
+# FSR skin, sensor model v1: per-taxel variability and rate-independent hysteresis, from the literature review
+# (docs/references/sensor_terrain_calibration.md, section 1): unloading time constant 20-100 ms drawn per taxel
+# (log-uniform), static hysteresis 7-17 % of full scale per taxel, gain spread 15 %, creep 6 %/1.5 s. Stage 1 (the
+# per-taxel "receptor" encoder) has to absorb these non-idealities.
+tactile:
+  model: fsr
+  params: {area: 1.0e-4, tau_unload: [0.02, 0.1], hysteresis: [0.07, 0.17]}
+joint: {model: motor}
+imu: {model: mems_imu}

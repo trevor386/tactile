@@ -1,6 +1,7 @@
 # hierarchical_meanmax + a learned absolute per-sensor embedding (layout-specific, like the flat baseline):
 # tests how much of the flat baseline's advantage comes from knowing which sensor is which.
 architecture: hierarchical
+fusion: mixed  # v0: one stage-2 graph over all sensor groups
 dim: 64
 temporal:
   type: conv_gru

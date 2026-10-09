@@ -1,0 +1,28 @@
+# Somatosensory hierarchy, version 1 (docs/architecture.md).
+#   Stage 1, "receptors": one temporal encoder per sensor group, shared by all sensors of that group (conv filter
+#     bank within each 20 ms step, GRU across steps). It sees only its own sensor's history.
+#   Stage 2, "spinal cord": spatial interaction within each group only (modalities segregated):
+#     tactile: 3D continuous kernel over a physical support radius of 45 mm (~2 taxel pitches, ~12 taxels on the rest
+#              pose), weights a learned function of the neighbour's position in the taxel's own frame, evaluated at
+#              the current pose (the support and weights follow the body as it bends);
+#     joint:   the same operator along the kinematic chain (150 mm: a joint and its two neighbours);
+#     imu:     a single sensor, no spatial operator.
+#   Stage 3, "brain" (10 Hz, every 5th latent step): one token per (group, body), attention biased by the tokens'
+#     current distances, a GRU over brain steps, the task output. Modalities first meet here.
+architecture: hierarchical
+dim: 64
+fusion: segregated
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial:
+  type: kernel3d
+  num_layers: 2
+  edge_features: rel_pos_local
+  length_scale: 0.045
+  graph: {k: 24, radius: 0.045, dynamic: true}
+  params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+spatial_overrides:
+  joint: {num_layers: 1, length_scale: 0.15, graph: {k: 5, radius: 0.15}}
+  imu: {type: none, num_layers: 1}
+heads:
+  terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true}

@@ -1,0 +1,16 @@
+# Ablation of somato_v1.yaml with modalities mixed in stage 2 (version 0): one kernel graph over all sensors, each
+# taxel also takes its 3 nearest joint sensors and the IMU as neighbours. Tests modality segregation.
+architecture: hierarchical
+dim: 64
+fusion: mixed
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial:
+  type: kernel3d
+  num_layers: 2
+  edge_features: rel_pos_local
+  length_scale: 0.045
+  graph: {k: 16, k_per_group: {tactile: 12, joint: 3, imu: 1}, dynamic: true}
+  params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+heads:
+  terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true}

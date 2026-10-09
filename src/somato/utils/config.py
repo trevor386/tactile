@@ -30,6 +30,14 @@ def save_yaml(data: dict[str, Any], path: str | Path) -> None:
         yaml.safe_dump(data, f, sort_keys=False)
 
 
+def deep_merge(base: dict, upd: dict) -> dict:
+    """A copy of ``base`` with ``upd`` merged in recursively (nested dicts merge, other values replace)."""
+    out = dict(base)
+    for k, v in upd.items():
+        out[k] = deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
 def _resolve_dataclass_type(tp: Any) -> type | None:
     """Return the dataclass type contained in ``tp`` (handles ``Optional[X]`` / ``X | None``)."""
     if dataclasses.is_dataclass(tp) and isinstance(tp, type):

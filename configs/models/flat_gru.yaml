@@ -1,0 +1,10 @@
+# Unstructured recurrent baseline: per latent step, all sensors' readings (per-step statistics: mean, std, last
+# sample of each channel) and the pose of every body in the robot (IMU) frame, flattened into one vector -> MLP ->
+# GRU over time -> MLP. Gets the same kinematic information as the structured models; no weight sharing across
+# sensors, no locality, no modality segregation. Tied to one sensor layout.
+architecture: flat_recurrent
+hidden: 128
+chunk_features: stats
+kinematics: true
+heads:
+  terrain: {type: global}

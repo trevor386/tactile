@@ -233,10 +233,24 @@ class LayoutInfo:
     rest_pos: torch.Tensor  # [N, 3]
     rest_rot: torch.Tensor  # [N, 3, 3]
     cluster_id: torch.Tensor  # [N]
+    # Derived per-layout quantities (sub-layouts, region assignments), computed once per instance.
+    cache: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def num_nodes(self) -> int:
         return self.group_id.shape[0]
+
+    def subset(self, group: str) -> LayoutInfo:
+        """The nodes of one sensor group as a layout of their own (modality-segregated stage-2 operators)."""
+        key = f"subset/{group}"
+        if key not in self.cache:
+            sl = self.slices[group]
+            self.cache[key] = LayoutInfo(
+                [group], [self.group_kinds[self.group_names.index(group)]], {group: slice(0, sl.stop - sl.start)},
+                torch.zeros_like(self.group_id[sl]), self.body_index[sl], self.area[sl], self.rest_pos[sl],
+                self.rest_rot[sl], self.cluster_id[sl],
+            )
+        return self.cache[key]
 
     @property
     def num_clusters(self) -> int:

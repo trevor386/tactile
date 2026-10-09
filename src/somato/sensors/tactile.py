@@ -58,11 +58,16 @@ class FSRTactile(SensorModel):
     Model (per taxel):
 
     * Rate-dependent hysteresis: the internal load follows the applied force with a fast loading
-      time constant and a slower unloading time constant.
+      time constant and a slower unloading time constant. ``tau_unload`` may be a range ``[lo, hi]``: each taxel
+      then draws its own (log-uniform), as real taxels differ.
     * Creep: a slow drift up under sustained load (fraction ``creep_frac``, time constant ``creep_tau``).
     * Power-law conductance above a turn-on threshold, ``G = (F_eff - F_th)^gamma / (F_ref^gamma R_ref)``,
       with per-taxel log-normal gain spread (manufacturing variation).
-    * Divider output ``V = R_m G / (1 + R_m G)`` (normalized to Vcc = 1), additive noise, ADC quantization.
+    * Divider output ``V = R_m G / (1 + R_m G)`` (normalized to Vcc = 1).
+    * Rate-independent hysteresis (``hysteresis``, a fraction of full scale, or a per-taxel uniform range): a play
+      operator on the output, which moves only once the input leaves a band of that width around it, so loading
+      and unloading curves differ by the band whatever the speed (measured 7-17 % for FSRs, varying per sensor).
+    * Additive noise, ADC quantization.
 
     Shear is not sensed. Output channel: ``fsr_v`` in [0, 1].
     """
@@ -73,21 +78,36 @@ class FSRTactile(SensorModel):
     def __init__(
         self, dt: float, area: float = 1e-4, force_threshold: float = 0.15, force_ref: float = 1.0,
         exponent: float = 1.1, r_ref: float = 1.0e4, r_divider: float = 1.0e4, gain_spread: float = 0.15,
-        tau_load: float = 0.002, tau_unload: float = 0.02, creep_frac: float = 0.06, creep_tau: float = 1.5,
-        noise_std: float = 0.003, adc_bits: int = 12,
+        tau_load: float = 0.002, tau_unload: float | tuple[float, float] = 0.02, creep_frac: float = 0.06,
+        creep_tau: float = 1.5, hysteresis: float | tuple[float, float] = 0.0, noise_std: float = 0.003,
+        adc_bits: int = 12,
     ):
         super().__init__(dt)
         self.area, self.force_threshold, self.force_ref, self.exponent = area, force_threshold, force_ref, exponent
         self.r_ref, self.r_divider, self.gain_spread = r_ref, r_divider, gain_spread
         self.tau_load, self.tau_unload, self.creep_frac, self.creep_tau = tau_load, tau_unload, creep_frac, creep_tau
-        self.noise_std, self.adc_bits = noise_std, adc_bits
+        self.hysteresis, self.noise_std, self.adc_bits = hysteresis, noise_std, adc_bits
+
+    @staticmethod
+    def _per_taxel(value, shape, ref, generator, log: bool = False) -> torch.Tensor:
+        """A scalar, or one uniform (log-uniform) draw per taxel from a ``[lo, hi]`` range."""
+        if isinstance(value, (int, float)):
+            return torch.full(shape, float(value), device=ref.device, dtype=ref.dtype)
+        lo, hi = (math.log(v) for v in value) if log else value
+        x = lo + (hi - lo) * torch.rand(shape, generator=generator, device=ref.device, dtype=ref.dtype)
+        return x.exp() if log else x
 
     def init_state(self, stimulus, generator=None):
         shape = stimulus.shape[:-3] + stimulus.shape[-2:-1]  # [*batch, N]
         gain = torch.exp(self.gain_spread * randn(shape, stimulus, generator))
         # Start at the first sample's force (at steady state) to avoid a start-up transient.
         f0 = stimulus[..., 0, :, 0].clamp_min(0.0) * self.area
-        return {"load": f0.clone(), "creep": f0.clone(), "gain": gain}
+        tau_unload = self._per_taxel(self.tau_unload, shape, stimulus, generator, log=True)
+        state = {"load": f0.clone(), "creep": f0.clone(), "gain": gain, "a_unload": self.dt / (tau_unload + self.dt)}
+        if self.hysteresis:
+            state["play_width"] = self._per_taxel(self.hysteresis, shape, stimulus, generator)
+            state["play"] = self._transfer(f0 * (1 + self.creep_frac), gain)  # output at the steady initial load
+        return state
 
     def _transfer(self, force: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
         f = (force - self.force_threshold).clamp_min(0.0) / self.force_ref
@@ -97,9 +117,9 @@ class FSRTactile(SensorModel):
     def forward(self, stimulus, state, generator=None):
         force = stimulus[..., 0].clamp_min(0.0) * self.area  # [*batch, T, N]
         a_load = self.dt / (self.tau_load + self.dt)
-        a_unload = self.dt / (self.tau_unload + self.dt)
         a_creep = self.dt / (self.creep_tau + self.dt)
         load, creep, gain = state["load"], state["creep"], state["gain"]
+        a_unload = state.get("a_unload", self.dt / (self.tau_unload + self.dt))
         # Only the load/creep recursion is sequential (few kernels per sample); the elementwise conductance
         # transfer then runs on the whole window at once.
         eff = torch.empty_like(force)
@@ -109,10 +129,18 @@ class FSRTactile(SensorModel):
             creep = torch.lerp(creep, load, a_creep)
             torch.add(load, creep, alpha=self.creep_frac, out=eff[..., t, :])
         v = self._transfer(eff, gain.unsqueeze(-2))
+        new_state = {**state, "load": load, "creep": creep}
+        if "play" in state:  # rate-independent hysteresis: play operator of width w
+            half, y = 0.5 * state["play_width"], state["play"]
+            out = torch.empty_like(v)
+            for t in range(v.shape[-2]):
+                y = torch.minimum(torch.maximum(y, v[..., t, :] - half), v[..., t, :] + half)
+                out[..., t, :] = y
+            v, new_state["play"] = out, y
         if self.noise_std > 0:
             v = v + self.noise_std * randn_like(v, generator)
         v = quantize(v.clamp(0.0, 1.0), 1.0 / (2**self.adc_bits - 1))
-        return v.unsqueeze(-1), {"load": load, "creep": creep, "gain": gain}
+        return v.unsqueeze(-1), new_state
 
 
 @SENSOR_MODELS.register("capacitive")

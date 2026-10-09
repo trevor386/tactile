@@ -22,7 +22,7 @@ from somato.training.experiment import (
 )
 from somato.utils.config import load_yaml
 
-WIDTH_KEY = {"hierarchical": "dim", "flat_recurrent": "hidden"}
+WIDTH_KEY = {"hierarchical": "dim", "flat_recurrent": "hidden", "transformer": "dim"}
 
 
 def _with_width(model_cfg: dict, width: int) -> dict:
@@ -50,7 +50,7 @@ def match_widths(models: dict[str, dict], reference: str, store: EpisodeStore, s
         if name == reference:
             out[name] = cfg
             continue
-        step = 4 if cfg.get("architecture", "hierarchical") == "hierarchical" else 1  # keep dims divisible by heads
+        step = 1 if cfg.get("architecture", "hierarchical") == "flat_recurrent" else 4  # dims divisible by heads
         width, model = match_parameter_count(lambda w: build(_with_width(cfg, step * w)), target, 1, 1024)
         out[name] = _with_width(cfg, step * width)
         print(f"[match] {name}: width {step * width}, params {count_parameters(model)} (target {target})")

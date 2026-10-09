@@ -226,6 +226,92 @@ def test_receptor_and_other_variants_build(small_desc, small_layout, small_info)
     assert torch.isfinite(out["terrain"]).all()
 
 
+BRAIN_MODEL = dict(SMALL_MODEL, brain_stride=2,
+                   heads={"terrain": {"type": "brain", "out_dim": 3, "hidden": 16, "heads": 2, "cluster_layers": 1,
+                                      "recurrent": True}},
+                   spatial_overrides={"imu": {"type": "none", "num_layers": 1}})
+
+
+@pytest.mark.parametrize("fusion", ["segregated", "mixed"])
+def test_stage2_modality_segregation(fusion, small_desc, small_layout, small_info):
+    """Segregated: a group's stage-2 features ignore every other group; mixed (v0): they do not."""
+    torch.manual_seed(0)
+    m = build_model(dict(SMALL_MODEL, fusion=fusion), GROUPS).eval()
+    batch = make_batch(small_desc, small_layout, small_info)
+    f1 = m(batch, return_features=True)[0]["features"]
+    batch.readings["joint"] = batch.readings["joint"] + 5.0
+    f2 = m(batch, return_features=True)[0]["features"]
+    sl = small_info.slices["tactile"]
+    same = torch.allclose(f1[:, :, sl], f2[:, :, sl], atol=1e-6)
+    assert same if fusion == "segregated" else not same
+
+
+def test_brain_head_stride_and_streaming(small_desc, small_layout, small_info):
+    torch.manual_seed(0)
+    m = build_model(BRAIN_MODEL, GROUPS).eval()
+    batch = make_batch(small_desc, small_layout, small_info, L=6)
+    full, _ = m(batch)
+    assert full["terrain"].shape == (2, 3, 3)  # brain steps 1, 3, 5
+    last, _ = m(batch, output_steps=1)
+    assert torch.allclose(last["terrain"][:, 0], full["terrain"][:, -1], atol=1e-5)
+    # Chunked streaming (3 + 1 + 2 steps) carries the step counter and the brain's memory.
+    outs, state = [], None
+    for a, b in ((0, 3), (3, 4), (4, 6)):
+        o, state = m(batch.steps(a, b), state)
+        if o:
+            outs.append(o["terrain"])
+    assert torch.allclose(torch.cat(outs, 1), full["terrain"], atol=1e-5)
+
+
+def test_brain_model_invariance_masking_and_transfer(small_desc, small_layout, small_info):
+    torch.manual_seed(0)
+    m = build_model(BRAIN_MODEL, GROUPS).eval()
+    batch = make_batch(small_desc, small_layout, small_info, L=4)
+    out, _ = m(batch)
+    out2, _ = m(transformed(batch, random_rotation(1)[0], torch.tensor([3.0, -1.0, 0.2])))
+    assert torch.allclose(out["terrain"], out2["terrain"], atol=1e-4)
+    mask = torch.ones(2, small_info.num_nodes, dtype=torch.bool)
+    mask[:, 2] = False
+    batch.node_mask = mask
+    o1, _ = m(batch)
+    batch.readings["tactile"][..., 2, :] += 100.0
+    o2, _ = m(batch)
+    assert torch.allclose(o1["terrain"], o2["terrain"], atol=1e-5)
+    desc = make_snake_description(SnakeConfig(num_links=8, radius=0.03))
+    layout = build_layout(desc, default_snake_sensor_spec(n_rings=3, n_per_ring=4))
+    o3, _ = m(make_batch(desc, layout, LayoutInfo.from_layout(layout, desc), L=4))
+    assert o3["terrain"].shape == (2, 2, 3)
+
+
+@pytest.mark.parametrize("arch", ["flat_recurrent", "transformer"])
+def test_baselines_kinematics_masking_and_matching(arch, model, small_desc, small_layout, small_info):
+    torch.manual_seed(0)
+    cfg = ({"architecture": arch, "hidden": 16} if arch == "flat_recurrent" else
+           {"architecture": arch, "dim": 16, "layers": 1, "attn_heads": 2, "patch_steps": 2})
+    cfg["heads"] = {"terrain": {"out_dim": 3, "hidden": 16}}
+    m = build_model(cfg, GROUPS, small_info).eval()
+    batch = make_batch(small_desc, small_layout, small_info, L=5)
+    out, _ = m(batch)
+    assert out["terrain"].shape[-1] == 3 and torch.isfinite(out["terrain"]).all()
+    # Kinematics enter in the robot (IMU) frame: invariant to where the robot is in the world ...
+    out2, _ = m(transformed(batch, random_rotation(1)[0], torch.tensor([3.0, -1.0, 0.2])))
+    assert torch.allclose(out["terrain"], out2["terrain"], atol=1e-4)
+    # ... but they are an input: a different body shape changes the output.
+    bent = SomatoBatch(batch.readings, batch.pos.clone(), batch.rot, batch.info)
+    bent.pos[..., small_info.slices["tactile"], 2] += 0.05
+    assert not torch.allclose(out["terrain"], m(bent)[0]["terrain"], atol=1e-4)
+    mask = torch.ones(2, small_info.num_nodes, dtype=torch.bool)
+    mask[:, 2] = False
+    batch.node_mask = mask
+    o1, _ = m(batch)
+    batch.readings["tactile"][..., 2, :] += 100.0
+    assert torch.allclose(o1["terrain"], m(batch)[0]["terrain"], atol=1e-5)
+    key = "hidden" if arch == "flat_recurrent" else "dim"
+    target = count_parameters(model)
+    _, matched = match_parameter_count(lambda w: build_model({**cfg, key: 2 * w}, GROUPS, small_info), target, 1, 256)
+    assert abs(count_parameters(matched) - target) / target < 0.15
+
+
 def test_normalizer_fit(model, small_desc, small_layout, small_info):
     batch = make_batch(small_desc, small_layout, small_info)
     scaled = {g: 50 * x + 3 for g, x in batch.readings.items()}

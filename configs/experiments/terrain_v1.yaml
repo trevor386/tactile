@@ -1,0 +1,29 @@
+# Terrain classification, version 1 (simulation v1 dataset, sensor model v1, model v1):
+#   python scripts/train.py --config configs/experiments/terrain_v1.yaml [--set model=configs/models/transformer.yaml]
+# Protocol v4: the step budget is max(3000 steps, 15 epochs) (`min_steps`, `epochs`), validation every 250 steps,
+# best-validation checkpoint, bf16. (v3's fixed 3000 steps under-trained the full-data runs.)
+name: terrain_v1
+dataset: datasets/mjlab_v1_2400
+output_dir: runs/v1
+sensors: configs/sensors/fsr_v1.yaml
+model: configs/models/somato_v1.yaml
+tasks:
+  terrain: {type: classification, label: terrain}
+window: 25          # 0.5 s windows at 50 Hz (a multiple of the brain stride 5)
+stride: 10
+eval_stride: 25
+split: [0.7, 0.15, 0.15]
+train:
+  epochs: 15
+  min_steps: 3000
+  eval_every: 250
+  patience: 0
+  batch_size: 32
+  lr: 1.0e-3
+  amp: bf16
+  output_steps: 4
+  select_metric: terrain/acc_last
+augment:
+  random_yaw: true
+  random_translation: 1.0
+  sensor_dropout: 0.05

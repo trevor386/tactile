@@ -1,5 +1,6 @@
 # Jiang et al. (2025)-style EGNN interaction layer on the same stage 1 (distance-only messages).
 architecture: hierarchical
+fusion: mixed  # v0: one stage-2 graph over all sensor groups
 dim: 64
 temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
 spatial:

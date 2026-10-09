@@ -44,6 +44,23 @@ def test_fsr_hysteresis_and_creep():
     assert v[399] > v[230]  # creep: reading keeps growing under constant load
 
 
+def test_fsr_rate_independent_hysteresis_and_per_taxel_params():
+    """A play operator of width w: after loading to a level and unloading back to a lower one, the reading differs
+    from the loading curve by about w, at any speed; per-taxel ranges give each taxel its own value."""
+    m = SENSOR_MODELS.build("fsr", dt=1e-3, noise_std=0.0, gain_spread=0.0, adc_bits=24, creep_frac=0.0,
+                            tau_load=1e-4, tau_unload=1e-4, hysteresis=0.1)
+    for T in (50, 400):  # fast and slow triangles
+        up = torch.linspace(0, 3e4, T)
+        x = torch.zeros(1, 2 * T, 1, 3)
+        x[0, :T, 0, 0], x[0, T:, 0, 0] = up, up.flip(0)
+        v = m(x)[0][0, :, 0, 0]
+        mid = T // 2  # same force on the way up (mid) and down (2T - 1 - mid)
+        assert abs(float(v[2 * T - 1 - mid] - v[mid]) - 0.1) < 0.02
+    m2 = SENSOR_MODELS.build("fsr", dt=1e-3, tau_unload=[0.02, 0.1], hysteresis=[0.07, 0.17])
+    st = m2.init_state(torch.rand(2, 10, 50, 3) * 2e4, torch.Generator().manual_seed(0))
+    assert st["a_unload"].std() > 0 and 0.07 <= float(st["play_width"].min()) <= float(st["play_width"].max()) <= 0.17
+
+
 def test_sensor_state_continuity():
     """Processing a sequence in two chunks with carried state equals processing it at once."""
     for name in ["fsr", "capacitive", "motor"]:
