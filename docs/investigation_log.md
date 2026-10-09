@@ -96,7 +96,7 @@ Avoid very long runs until the earlier steps are sound.
 | 7 | E-6 | Sensor robustness (H-2a, H-3) | Evaluate E-2 checkpoints under single-factor perturbations of the FSR v1 model (slower or faster unloading, more hysteresis, gain spread, noise, dead taxels). | T-8 suite | < 1 h | E-2, T-8 | queued |
 | 8 | E-8 | Sim-to-sim (H-2c) | Train on mjlab, test on Isaac (and the reverse) on paired episodes. | to write | ~3 h | T-10 | queued |
 | 9 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction and compliance ranges, test on the rest (extrapolation). | to write | ~3 h | E-1 | queued |
-| 10 | E-7 | OOD terrains (H-2b, H-11, H-13) | Cold arctic ice, Europa-like ice (low g, low pressure), dry sand, gravel. Evaluate property estimates and class posteriors (open-set). | to write | ~2 h | T-9, E-5 | queued |
+| 10 | E-7 | OOD terrains (H-2b, H-11, H-13) | Cold arctic ice, dry sand, gravel (Earth set; Europa deprioritized, Q-2). Evaluate property estimates and class posteriors (open-set). | `collect_mjlab_ood_earth.yaml` | ~2 h | T-9, E-5 | queued |
 | 11 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns at test time; a robot with different link count or taxel density (structured models only, since the baselines are tied to one layout; report this as a qualitative advantage). | to write | < 1 h | E-2 | queued |
 | 12 | E-13 | Slide-direction proxy (H-9, H-8) | A force sliding along or around the body; classify the direction (4-way). somato_v1, no_spatial, pool, flat_gru, transformer at 10 % and 100 % of 840 training episodes. | `configs/experiments/proxy_slide.yaml` | ~2 h | T-12 | queued (ready; a cheap early test of H-9 that could move up the queue) |
 | 13 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal prediction pretraining, then fine-tune at small data. | to write | ~6 h | T-11 | queued |
@@ -117,7 +117,7 @@ Avoid very long runs until the earlier steps are sound.
 | T-2 | Write `docs/architecture.md` for version 1. Include: stage mapping receptor / spinal cord / brain; why stage 2 uses the current poses every step (that is how a 3D kernel follows a moving body); the kernel3d vs graph distinction; segregation; brain; baselines. | next |
 | T-3 | Update `docs/mjlab.md` (compliant contact pairs, calibration), `README.md` (v1 configs and quickstart), `docs/isaac_sim.md` (driver 580 since 2026-10-08). | next |
 | T-4 | Update the persistent memory notes (driver change, memory-cap rule, log structure). | done 2026-10-08 |
-| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | pending: a three-reviewer workflow was interrupted on 2026-10-08 before it ran; re-run once the user agrees |
+| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | running: two Sonnet reviewers (models/training; sim/sensors/data), findings verified in the main session |
 | T-6 | `scripts/analysis/task_ceiling.py` for catalog v1: Bayes ceilings from the sampled parameters (friction only, + compliance, + roughness), to interpret E-1. | done 2026-10-08 (F-13) |
 
 **Planned**
@@ -173,9 +173,9 @@ Avoid very long runs until the earlier steps are sound.
 
 | ID | question | default until answered |
 |---|---|---|
-| Q-1 | Should the primary task stay 5-class terrain classification, or move to physical property estimation (friction, compliance/sinkage, roughness), which transfers to unknown worlds (H-11)? | Keep classification as primary for E-1/E-2; add property estimation (E-5). |
-| Q-2 | Europa-like OOD set: compliant silicone skin, or glassy skin (silicone is glassy at ~100 K, which changes contact stiffness by orders of magnitude)? | Model both as two OOD sets. |
-| Q-3 | With literature friction ranges (glare ice 0.05–1.0 across temperature), glare ice and dry concrete are nearly indistinguishable by touch (same skin-dominated stiffness, invisible fine texture). That is physically honest, but it caps the classification ceiling. Keep it? | Keep; T-6 quantifies the ceiling. |
+| Q-1 | Should the primary task stay 5-class terrain classification, or move to physical property estimation (friction, compliance/sinkage, roughness), which transfers to unknown worlds (H-11)? | **Answered 2026-10-08: both are fine; both are proxies for now.** Long term, stage 3 becomes much more complex and part of a locomotion controller, which may or may not estimate physical properties directly. |
+| Q-2 | Europa-like OOD set: compliant silicone skin, or glassy skin (silicone is glassy at ~100 K, which changes contact stiffness by orders of magnitude)? | **Answered 2026-10-08: do not work on Europa deployment now.** It is motivation, far out of scope. The Europa catalog stays in the repo but is not in the near-term queue; Earth OOD sets (cold ice, sand, gravel) carry E-7. |
+| Q-3 | With literature friction ranges (glare ice 0.05–1.0 across temperature), glare ice and dry concrete are nearly indistinguishable by touch (same skin-dominated stiffness, invisible fine texture). That is physically honest, but it caps the classification ceiling. Keep it? | **Answered 2026-10-08: keep it.** There are no thermal sensors; if touch cannot tell them apart, that is a hardware limitation. |
 | Q-4 | Pushing failed (403): the machine was logged in as another person's GitHub account, which also authored the local commits. | resolved 2026-10-08: the user logged in as trevor386; the 42 local commits by the other identity were re-authored to trevor386 <trevorjohst@proton.me> (contents and dates unchanged) before the first push (`ce8835d..97ee0bf`, fast-forward). |
 
 ## 6. Decisions
@@ -192,3 +192,5 @@ Avoid very long runs until the earlier steps are sound.
 | 2026-10-08 | Protocol v4: budget max(3,000 steps, 15 epochs), validation every 250 steps, best-val checkpoint, bf16, widths matched. | v3's fixed 3,000 steps under-trained full-data runs (F0-11). |
 | 2026-10-08 | Every process that loads data or uses the GPU runs under a systemd memory cap; datasets load through the mmap cache. | RAM freeze (F-1). |
 | 2026-10-08 | Analysis is done in the main session; subagents only for bulky low-judgment work (literature, mechanical code) or easy Sonnet tasks. | User preference. |
+| 2026-10-08 | Tasks: 5-class classification and property estimation are both proxies; stage 3 will eventually feed a locomotion controller. Europa is motivation only (no near-term work). Touch-indistinguishable classes (glare ice vs concrete) stay. | User answers to Q-1 to Q-3. |
+| 2026-10-08 | Use tokens economically (session usage limits): lean reviews on Sonnet, no unnecessary polling. | User, 2026-10-08. |
