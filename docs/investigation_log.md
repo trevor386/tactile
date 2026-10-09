@@ -18,8 +18,10 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
   1. Accuracy mean ± std over the 3 seeds per model and fraction (`results.csv`, `summary.md`, curves PNG).
   2. Episodes needed by each baseline to reach somato_pool's accuracy (H-1).
   3. Gap vs data (H-4), receptor_only vs somato_pool (H-14), per-class recall.
-  4. Then E-6 (robustness on the saved checkpoints, `configs/sensors/robustness_fsr_v1.yaml`) and E-7 (OOD Earth set:
-     collect `collect_mjlab_ood_earth.yaml`, write the open-set evaluation).
+  4. Queue v1f then runs automatically (`runs/logs/queue_v1f.sh`, log `runs/logs/queue_v1f.log`): collect the OOD
+     Earth set, E-6 robustness (`runs/v1/robustness_e6.csv`, log `runs/logs/e6_robustness.log`), E-7 OOD
+     (`scripts/analysis/ood_eval.py` → `runs/v1/ood_e7.csv`, log `runs/logs/e7_ood.log`). Both evaluation scripts are
+     untested on v1 checkpoints: check their logs for errors first.
 * **Then:**
   1. E-1c (lr sweep with the chosen stage 3).
   2. E-2 (main curves, 3 seeds).
