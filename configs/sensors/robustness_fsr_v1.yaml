@@ -1,0 +1,18 @@
+# Sensor-robustness suite for models trained on configs/sensors/fsr_v1.yaml (scripts/analysis/robustness.py, E-6):
+# the trained models meet a skin that behaves differently from the simulated one, a proxy for sim-to-real (H-2a, H-3).
+# Single factors first, then all together. `augment` entries change the evaluation batches (dead taxels read 0 /
+# are masked; the structured models ignore masked nodes, the baselines see zeros).
+base: configs/sensors/fsr_v1.yaml
+perturbations:
+  nominal: {}
+  slow_unloading: {tactile: {params: {tau_unload: [0.1, 0.3]}}}           # elastomer recovery beyond the 20-100 ms range
+  more_hysteresis: {tactile: {params: {hysteresis: [0.17, 0.3]}}}         # above the measured 7-17 % full scale
+  no_hysteresis: {tactile: {params: {hysteresis: 0.0, tau_unload: 0.02}}} # a cleaner sensor than in training
+  creep: {tactile: {params: {creep_frac: 0.15, creep_tau: 1.0}}}
+  gain_spread: {tactile: {params: {gain_spread: 0.35}}}                   # DIY-grade taxel-to-taxel variation
+  noise: {tactile: {params: {noise_std: 0.01}}}                           # 3x noise (long wires, EMI)
+  dead_10pct: {augment: {eval_sensor_dropout: 0.1}}
+  dead_30pct: {augment: {eval_sensor_dropout: 0.3}}
+  all: {tactile: {params: {tau_unload: [0.1, 0.3], hysteresis: [0.17, 0.3], creep_frac: 0.15, creep_tau: 1.0,
+                           gain_spread: 0.35, noise_std: 0.01}},
+        augment: {eval_sensor_dropout: 0.1}}

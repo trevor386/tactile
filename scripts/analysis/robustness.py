@@ -11,6 +11,7 @@ the drop from nominal; writes one CSV row per pair.
 import argparse
 import csv
 import glob
+from dataclasses import replace
 from pathlib import Path
 
 import torch
@@ -41,7 +42,11 @@ def main():
         raise SystemExit(f"no checkpoints match {args.runs}")
     suite_cfg = load_yaml(args.suite)
     base_sensors = load_yaml(suite_cfg["base"])
-    perturbations = {k: deep_update(load_yaml(suite_cfg["base"]), v or {}) for k, v in suite_cfg["perturbations"].items()}
+    perturbations = {}  # name -> (sensor config, augmentation overrides such as eval_sensor_dropout)
+    for k, v in suite_cfg["perturbations"].items():
+        v = dict(v or {})
+        augment = v.pop("augment", {})
+        perturbations[k] = (deep_update(load_yaml(suite_cfg["base"]), v), augment)
     device = resolve_device("auto")
     store = EpisodeStore(args.dataset)
     labels = store.labels("terrain")
@@ -66,9 +71,9 @@ def main():
         prepare_store_for_tasks(store, tasks)
         run = Path(path).parent
         result = {"model": run.parent.name, "run": run.name, "train_fraction": cfg.train_fraction}
-        for name, sensors in perturbations.items():
+        for name, (sensors, augment) in perturbations.items():
             trainer = Trainer(model, tasks, BatchPreparer(store.layout, info, build_suite(store, sensors), device,
-                                                          cfg.augment), cfg.train)
+                                                          replace(cfg.augment, **augment)), cfg.train)
             torch.manual_seed(args.seed)
             m = trainer.evaluate(ds)
             rows.append({**result, "perturbation": name, "acc_last": m["terrain/acc_last"],

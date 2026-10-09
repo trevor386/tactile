@@ -19,6 +19,8 @@ class AugmentConfig:
     random_translation: float = 1.0  # m, uniform xy shift
     sensor_dropout: float = 0.0  # fraction of sensors marked dead (node_mask) per sample
     dropout_groups: list[str] = field(default_factory=lambda: ["tactile"])
+    # Dead sensors also at evaluation (robustness tests: a damaged skin); 0 = all sensors work when not training.
+    eval_sensor_dropout: float = 0.0
 
 
 class BatchPreparer:
@@ -57,12 +59,13 @@ class BatchPreparer:
             brot = R @ brot
         pos, rot = self.layout.world_poses(bpos, brot)
         node_mask = None
-        if train and aug.sensor_dropout > 0:
+        dropout = aug.sensor_dropout if train else aug.eval_sensor_dropout
+        if dropout > 0:
             node_mask = torch.ones(B, self.info.num_nodes, dtype=torch.bool, device=self.device)
             for g in aug.dropout_groups:
                 if g in self.info.slices:
                     sl = self.info.slices[g]
-                    node_mask[:, sl] = torch.rand(B, sl.stop - sl.start, device=self.device) >= aug.sensor_dropout
+                    node_mask[:, sl] = torch.rand(B, sl.stop - sl.start, device=self.device) >= dropout
         labels = {k[6:]: v for k, v in sample.items() if k.startswith("label/")}
         labels.update({k: v for k, v in sample.items() if k.startswith("param/")})
         return SomatoBatch(readings, pos, rot, self.info, node_mask, labels)
