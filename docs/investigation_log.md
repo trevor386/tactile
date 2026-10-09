@@ -11,10 +11,13 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 ## RESUME HERE (state as of 2026-10-09 ~05:40)
 
-* **Running, unattended:** queue v1c, E-19 (brain diagnostics on the proxy, then on terrain), started 05:30,
-  until ~08:00. E-3/E-4 are done (F-18); `validate_mjlab` after the review fixes: 15/15.
-* **When E-19 lands:** run `python scripts/analysis/summarize_study.py runs/v1/e19_brain_proxy` (and
-  `e19_brain_terrain`) and write a findings entry. Choose the stage-3 design: a fixed brain, or pooling plus memory.
+* **Running, unattended:** queue v1d, E-19b (residual brain memory, proxy then terrain), from 08:02, ~45 min. E-19
+  is done (F-19: the GRU caused the stall).
+* **When E-19b lands:**
+  1. If the residual memory matches pool on the proxy, set `residual_memory: true` in `configs/models/somato_v1*.yaml`
+     (brain heads).
+  2. Launch E-1c (lr sweep).
+  3. Then E-2.
 * **Then:**
   1. E-1c (lr sweep with the chosen stage 3).
   2. E-2 (main curves, 3 seeds).
@@ -87,7 +90,8 @@ Avoid very long runs until the earlier steps are sound.
 | # | ID | experiment | purpose / design | config | cost | depends on | status |
 |---|---|---|---|---|---|---|---|
 | 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. | `configs/experiments/v1_signs_of_life.yaml` | ~2 h | T-1, T-6 | done 2026-10-08 (F-14, F-16; FSR bug caveat) |
-| 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | queued (v1c) |
+| 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | done 2026-10-09 (F-19: the GRU causes the stall) |
+| 2a | E-19b | Residual brain memory | Brain with `residual_memory` (± node-pool path) on the proxy and terrain at 10 %; if it matches pool on the proxy, it becomes somato_v1's stage 3 for E-1c and E-2. | `configs/experiments/e19b_brain_residual.yaml` | ~45 min | E-19 | running (queue v1d, from 08:02) |
 | 2b | E-1c | **Baseline fairness / tuning** | E-1 again with the fixed FSR model, learning rate 3e-4 / 1e-3 / 3e-3 for every model; the best lr per model goes into E-2. | `--set base_overrides.train.lr=...` on `v1_signs_of_life.yaml` | ~5.5 h | E-19 decision | queued |
 | 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
 | 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | `v1_structure_ablations.yaml` | ~5 h | E-1 | done 2026-10-09 (F-18) |

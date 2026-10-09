@@ -44,6 +44,9 @@ class HeadConfig:
     dropout: float = 0.0
     max_groups: int = 8  # brain head: size of the modality-embedding table (sensor groups in layout order)
     node_pool: bool = False  # brain head: also feed the mean and max over all sensors (the static pool head's input)
+    # brain head: memory as a residual correction, z + GRU(LayerNorm(z)), so the head works without it from the start
+    # (a plain GRU in the output path stalled at uniform predictions for thousands of steps, F-19)
+    residual_memory: bool = False
 
 
 def cluster_reduce(h: torch.Tensor, cluster_id: torch.Tensor, num_clusters: int, mask: torch.Tensor | None):
@@ -199,6 +202,7 @@ class BrainHead(nn.Module):
         self.norm = nn.LayerNorm(dim)
         self.fuse = nn.Sequential(nn.Linear((6 if cfg.node_pool else 4) * dim, cfg.hidden), nn.GELU())
         self.rnn = nn.GRU(cfg.hidden, cfg.hidden, batch_first=True) if cfg.recurrent else None
+        self.rnn_norm = nn.LayerNorm(cfg.hidden) if cfg.recurrent and cfg.residual_memory else None
         self.out = mlp(cfg.hidden, cfg.hidden, cfg.out_dim, layers=2, dropout=cfg.dropout)
 
     def init_state(self, batch: int, device) -> dict:
@@ -232,7 +236,11 @@ class BrainHead(nn.Module):
         new_state = {}
         if self.rnn is not None:
             state = state or self.init_state(B, h.device)
-            z, hn = self.rnn(z, state["h"])
+            if self.rnn_norm is not None:
+                r, hn = self.rnn(self.rnn_norm(z), state["h"])
+                z = z + r
+            else:
+                z, hn = self.rnn(z, state["h"])
             new_state = {"h": hn}
         return self.out(z), new_state
 

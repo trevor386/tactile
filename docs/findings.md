@@ -13,6 +13,34 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-19. E-19: the brain head's stall comes from its GRU.** *Why:* F-17 (brain stalls, then memorizes on the slide
+proxy). *Setup:* `configs/experiments/e19_brain_diagnostics.yaml`; stages 1–2 identical (dim 64, no width matching),
+only stage 3 varies; slide proxy at 84 episodes and terrain at 170; seed 0.
+*Result (test acc):*
+
+| stage 3 | proxy | terrain |
+|---|---|---|
+| pool (static mean+max) | **0.985** | 0.612 |
+| brain (attention + GRU) | 0.241 | 0.601 |
+| brain without GRU | **0.906** | 0.588 |
+| brain without attention | 0.250 | 0.555 |
+| brain + direct node-pool path | 0.250 | 0.573 |
+| brain, smaller (GRU 64, 1 layer) | 0.692 | 0.643 |
+
+*Evidence:*
+* Every variant with the full-size GRU in the output path holds the training loss at exactly ln 4 for 1,000 to more
+  than 3,000 steps. That includes the variant with a direct path from the pooled sensor features: the GRU sits between
+  it and the output.
+* Removing the GRU removes the stall (val 0.92 by step 1,000).
+* On terrain all variants are within noise (SE ±2.6).
+
+*Caveats:* one seed. The mechanism (GRU saturation by sample-independent features at initialization, F0-8) is
+plausible but not shown.
+*Implication:*
+* Keep memory in stage 3 (the stated intent), but as a residual correction: z + GRU(LayerNorm(z)) (`residual_memory`).
+  The head then works without the memory from the start.
+* Tested in E-19b before E-1c.
+
 **F-18. E-3/E-4, structure ablations on terrain: stage-2 choices barely matter here; the family's lead over the
 baselines comes from stage 1 and pooling.**
 *Why:* what does each imposed structure contribute (H-5, H-6, H-7, H-8)?

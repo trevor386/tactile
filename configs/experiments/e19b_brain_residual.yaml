@@ -1,0 +1,36 @@
+# E-19b: does a residual memory fix the brain head (F-19: the plain GRU stalled at uniform predictions)? Same setup as
+# E-19 (stages 1-2 identical, dim 64), slide proxy at 84 episodes; terrain with
+#   --set base_overrides.dataset=datasets/mjlab_v1_2400 output_dir=runs/v1/e19b_brain_terrain
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  dataset: datasets/proxy_slide_1200
+output_dir: runs/v1/e19b_brain_proxy
+fractions: [0.1]
+seeds: [0]
+match_params: false
+save_checkpoints: false
+_somato: &somato
+  architecture: hierarchical
+  dim: 64
+  fusion: segregated
+  brain_stride: 5
+  temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+  spatial:
+    type: kernel3d
+    num_layers: 2
+    edge_features: rel_pos_local
+    length_scale: 0.045
+    graph: {k: 24, radius: 0.045, dynamic: true}
+    params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+  spatial_overrides:
+    joint: {num_layers: 1, length_scale: 0.15, graph: {k: 5, radius: 0.15}}
+    imu: {type: none, num_layers: 1}
+models:
+  brain_resmem:          # attention + residual memory
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true,
+                      residual_memory: true}}
+  brain_resmem_nodepool: # + direct node-pool path
+    <<: *somato
+    heads: {terrain: {type: brain, hidden: 128, heads: 4, cluster_layers: 2, cluster_length_scale: 0.2, recurrent: true,
+                      residual_memory: true, node_pool: true}}
