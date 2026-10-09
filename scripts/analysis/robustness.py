@@ -17,7 +17,9 @@ import torch
 
 from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split
 from somato.geometry import LayoutInfo
-from somato.training.experiment import ExperimentConfig, build_suite, deep_update, load_trained_model
+from somato.training.experiment import (
+    ExperimentConfig, build_suite, deep_update, load_trained_model, prepare_store_for_tasks,
+)
 from somato.training.prepare import BatchPreparer
 from somato.training.tasks import build_tasks
 from somato.training.trainer import Trainer, resolve_device
@@ -61,6 +63,7 @@ def main():
             datasets[key] = WindowDataset(store, test_ids, cfg.window, cfg.eval_stride)
         ds = datasets[key]
         tasks = build_tasks(cfg.tasks)
+        prepare_store_for_tasks(store, tasks)
         run = Path(path).parent
         result = {"model": run.parent.name, "run": run.name, "train_fraction": cfg.train_fraction}
         for name, sensors in perturbations.items():

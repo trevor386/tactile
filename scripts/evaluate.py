@@ -14,7 +14,7 @@ import torch
 
 from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split
 from somato.geometry import LayoutInfo
-from somato.training.experiment import ExperimentConfig, build_suite, load_trained_model
+from somato.training.experiment import ExperimentConfig, build_suite, load_trained_model, prepare_store_for_tasks
 from somato.training.prepare import BatchPreparer
 from somato.training.tasks import ClassificationTask, build_tasks
 from somato.training.trainer import Trainer, resolve_device
@@ -61,6 +61,7 @@ def main():
     if any(suite.models[g].num_outputs != ckpt["groups"][g]["channels"] for g in ckpt["groups"] if g in suite.models):
         raise ValueError("--sensors must produce the same reading channels as the training sensors")
     tasks = build_tasks(cfg.tasks)
+    prepare_store_for_tasks(store, tasks)
     trainer = Trainer(model, tasks, BatchPreparer(store.layout, info, suite, device, cfg.augment), cfg.train)
     metrics = trainer.evaluate(ds)
     cls = [t for t in tasks if isinstance(t, ClassificationTask)]

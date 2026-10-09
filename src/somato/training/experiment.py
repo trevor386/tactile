@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import copy
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import torch
 
 from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split, stratified_subset
+from somato.data.derived import add_measured_sinkage
 from somato.geometry.layout import LayoutInfo
 from somato.models.batch import GroupSpec
 from somato.models.baselines import count_parameters
@@ -18,7 +19,7 @@ from somato.models.builder import build_model, parse_model_config
 from somato.sensors.suite import SensorSuite
 from somato.sim.runner import RateConfig
 from somato.training.prepare import AugmentConfig, BatchPreparer
-from somato.training.tasks import ClassificationTask, build_tasks
+from somato.training.tasks import ClassificationTask, PropertyRegressionTask, build_tasks
 from somato.training.trainer import Trainer, TrainConfig, resolve_device, save_checkpoint
 from somato.utils.config import deep_merge, from_dict, load_yaml, to_dict
 from somato.utils.seeding import seed_everything
@@ -90,6 +91,29 @@ def resolve_config_refs(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+def prepare_store_for_tasks(store: EpisodeStore, tasks: list) -> None:
+    """Add the derived episode labels the tasks need (e.g. measured sinkage for property regression)."""
+    if any(isinstance(t, PropertyRegressionTask) and "sinkage_mm" in t.targets for t in tasks):
+        add_measured_sinkage(store)
+
+
+def ensure_task_heads(model_cfg, tasks: list, num_classes: int) -> None:
+    """Give every task a head of the right size: classification heads match the dataset's class count, and a task
+    whose head the model config lacks gets a copy of the model's first head (same type and width)."""
+    template = next(iter(model_cfg.heads.values()))
+    for t in tasks:
+        if isinstance(t, ClassificationTask):
+            out_dim = num_classes
+        elif isinstance(t, PropertyRegressionTask):
+            out_dim = t.out_dim
+        else:
+            continue
+        if t.head in model_cfg.heads:
+            model_cfg.heads[t.head].out_dim = out_dim
+        else:
+            model_cfg.heads[t.head] = replace(template, out_dim=out_dim)
+
+
 def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, verbose: bool = True) -> dict[str, Any]:
     cfg = resolve_config_refs(cfg)
     seed_everything(cfg.train.seed)
@@ -120,10 +144,13 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     groups = group_specs(store, suite)
     model_cfg = parse_model_config(copy.deepcopy(cfg.model) if isinstance(cfg.model, dict) else cfg.model)
     task_list = build_tasks(cfg.tasks)
+    prepare_store_for_tasks(store, task_list)
+    for t in task_list:  # standardize regression targets on the training episodes; keep the stats for evaluation
+        if isinstance(t, PropertyRegressionTask):
+            t.fit(torch.tensor([[store.episodes[int(e)].params[k] for k in t.targets] for e in train_ids]))
+            cfg.tasks[t.name] = {**cfg.tasks[t.name], "stats": t.stats}
     num_classes = len(store.meta.terrain_names)
-    for t in task_list:  # classification heads always match the dataset's class count
-        if isinstance(t, ClassificationTask) and t.head in model_cfg.heads:
-            model_cfg.heads[t.head].out_dim = num_classes
+    ensure_task_heads(model_cfg, task_list, num_classes)
     info = LayoutInfo.from_layout(store.layout, store.desc, getattr(model_cfg, "cluster_mode", "body"),
                                   getattr(model_cfg, "num_clusters", None))
     model = build_model(model_cfg, groups, info)

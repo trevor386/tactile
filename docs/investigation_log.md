@@ -90,7 +90,7 @@ Avoid very long runs until the earlier steps are sound.
 | 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | to write | ~3 h | E-1 | queued |
 | 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | to write | ~1.5 h | E-1 | queued |
 | 5 | E-2 | **Main learning curves** (H-1, H-4) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato_v1, flat_gru, flat_gru_raw, transformer. | to write | ~20 h | E-1, E-1b | queued |
-| 6 | E-5 | Property estimation (H-11) | Regress friction, measured sinkage and roughness (plus classification) for the main models. | to write | ~3 h | T-7 | queued |
+| 6 | E-5 | Property estimation (H-11) | Regress friction, measured sinkage and roughness (plus classification) for the main models. | `configs/experiments/v1_properties.yaml` | ~3 h | T-7 | queued (ready to run) |
 | 7 | E-6 | Sensor robustness (H-2a, H-3) | Evaluate E-2 checkpoints under single-factor perturbations of the FSR v1 model (slower or faster unloading, more hysteresis, gain spread, noise, dead taxels). | T-8 suite | < 1 h | E-2, T-8 | queued |
 | 8 | E-8 | Sim-to-sim (H-2c) | Train on mjlab, test on Isaac (and the reverse) on paired episodes. | to write | ~3 h | T-10 | queued |
 | 9 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction and compliance ranges, test on the rest (extrapolation). | to write | ~3 h | E-1 | queued |
@@ -122,7 +122,7 @@ Avoid very long runs until the earlier steps are sound.
 
 | ID | task | for | status |
 |---|---|---|---|
-| T-7 | Property-regression task: friction, measured sinkage (from body poses: capsule depth when in contact), roughness amplitude; normalized targets, Huber loss; multi-task with classification. | E-5 | queued |
+| T-7 | Property-regression task: friction, measured sinkage (from body poses: capsule depth when in contact), roughness amplitude; normalized targets, Huber loss; multi-task with classification. | E-5 | done 2026-10-08 for friction + measured sinkage (`property_regression` task, `data/derived.py`, heads created automatically, stats saved in the checkpoint; study config `configs/experiments/v1_properties.yaml`). Felt roughness as a target still to add. |
 | T-8 | Robustness suite v1: perturbations relative to `fsr_v1.yaml`, plus dead-taxel patterns at test time (node mask in evaluation). | E-6 | queued |
 | T-9 | OOD terrain catalogs: cold arctic ice, Europa-like (g = 1.315 m/s² needs a per-scene gravity change in mjlab; skin assumption Q-2), dry sand, gravel; open-set evaluation path for classes absent in training. | E-7 | queued |
 | T-10 | Isaac parity for sim-to-sim: PhysX compliant-contact stiffness and damping per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac still runs on driver 580. | E-8 | queued |

@@ -13,6 +13,7 @@ from somato.sim.setup import CollectConfig, make_mock_runner
 from somato.sources import ReplaySource
 from somato.training import AugmentConfig, BatchPreparer, ExperimentConfig, TrainConfig, run_experiment
 from somato.training.experiment import build_suite, group_specs, load_trained_model
+from somato.training.tasks import PropertyRegressionTask
 
 ROBOT = {"robot": {"type": "snake", "params": {"num_links": 4}},
          "sensors": {"tactile": {"placements": [{"generator": "cylinder", "bodies": r"link_\d+", "n_rings": 2,
@@ -125,6 +126,37 @@ def test_input_groups_ablation(tmp_path, dataset_dir, store, groups):
                                train=TrainConfig(epochs=1, batch_size=4, output_steps=2), window=6, stride=6,
                                split=(1 / 3, 1 / 3, 1 / 3), input_groups=groups, save_checkpoint=False)
         assert 0.0 <= run_experiment(cfg, store, verbose=False)["test/terrain/acc_last"] <= 1.0
+
+
+def test_property_regression_task_transforms():
+    t = PropertyRegressionTask("props", targets=["friction", "sinkage_mm"], log_targets=["sinkage_mm"])
+    vals = torch.tensor([[0.1, 0.05], [0.5, 5.0], [0.9, 15.0]])
+    t.fit(vals)
+    z = t._standardize(vals)
+    assert torch.allclose(z.mean(0), torch.zeros(2), atol=1e-5)
+    assert torch.allclose(t._raw_prediction(z), vals, atol=1e-4)
+    with pytest.raises(ValueError):
+        PropertyRegressionTask("bad", targets=["friction"], log_targets=["sinkage_mm"])
+
+
+@pytest.mark.parametrize("arch", ["hierarchical", "transformer"])
+def test_property_regression_multitask(tmp_path, dataset_dir, store, arch):
+    """Classification + property regression: the regression head is created from the model's first head, the
+    targets (incl. the derived measured sinkage) are standardized on the training episodes and the stats saved."""
+    model = TINY_MODEL if arch == "hierarchical" else {"architecture": "transformer", "dim": 16, "layers": 1,
+                                                          "attn_heads": 2, "patch_steps": 3}
+    tasks = {"terrain": {"type": "classification"},
+             "props": {"type": "property_regression", "targets": ["friction", "sinkage_mm"],
+                       "log_targets": ["sinkage_mm"]}}
+    cfg = ExperimentConfig(name=f"props_{arch}", dataset=str(dataset_dir), output_dir=str(tmp_path), model=model,
+                           tasks=tasks, sensors=IDEAL, train=TrainConfig(epochs=1, batch_size=4, output_steps=2),
+                           window=6, stride=6, eval_stride=6, split=(1 / 3, 1 / 3, 1 / 3))
+    result = run_experiment(cfg, store, verbose=False)
+    assert result["test/props/mae_friction"] >= 0 and "test/props/mae_sinkage_mm" in result
+    assert "sinkage_mm" in store.episodes[0].params
+    model, ckpt = load_trained_model(tmp_path / f"props_{arch}" / "model.pt",
+                                     info=LayoutInfo.from_layout(store.layout, store.desc))
+    assert ckpt["experiment"]["tasks"]["props"]["stats"]["std"][0] > 0 and "props" in model.heads
 
 
 def test_flat_baseline_experiment(tmp_path, dataset_dir, store):
