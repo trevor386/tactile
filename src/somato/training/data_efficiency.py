@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import csv
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +66,12 @@ def run_data_efficiency(study_path: str | Path, overrides: dict[str, Any] | None
     store = EpisodeStore(base.dataset)
     if base.input_groups:  # match widths for the sensor groups actually fed to the models
         store = store.select_groups(base.input_groups)
-    models = {n: load_yaml(m) if isinstance(m, str) else m for n, m in study["models"].items()}
+    # A model entry is a config (path or dict), or {model: <config>, train: {...}} with per-model training overrides
+    # (e.g. the learning rate tuned for that model).
+    train_over = {n: dict(m.get("train", {})) if isinstance(m, dict) and "model" in m else {}
+                  for n, m in study["models"].items()}
+    models = {n: m["model"] if isinstance(m, dict) and "model" in m else m for n, m in study["models"].items()}
+    models = {n: load_yaml(m) if isinstance(m, str) else m for n, m in models.items()}
     if study.get("match_params", False):
         models = match_widths(models, study.get("reference_model", next(iter(models))), store, base.sensors,
                               len(store.meta.terrain_names))
@@ -77,7 +83,8 @@ def run_data_efficiency(study_path: str | Path, overrides: dict[str, Any] | None
         for seed in study["seeds"]:
             for name, mcfg in models.items():
                 cfg = copy.deepcopy(base)
-                cfg.model, cfg.train_fraction, cfg.train.seed = mcfg, float(frac), int(seed)
+                cfg.model, cfg.train_fraction = mcfg, float(frac)
+                cfg.train = replace(cfg.train, **train_over[name], seed=int(seed))
                 cfg.name, cfg.output_dir = f"{name}/frac{frac}_seed{seed}", str(out_dir)
                 cfg.save_checkpoint = bool(study.get("save_checkpoints", False))  # e.g. for robustness evaluation
                 r = run_experiment(cfg, store)

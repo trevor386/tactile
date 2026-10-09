@@ -251,19 +251,30 @@ def test_brain_stride_chunks_without_brain_step_and_window_check(tmp_path, datas
                                         sensors=IDEAL, window=6, split=(1 / 3, 1 / 3, 1 / 3)), store, verbose=False)
 
 
-def test_data_efficiency_study(tmp_path, dataset_dir):
+def test_data_efficiency_study(tmp_path, dataset_dir, monkeypatch):
+    import somato.training.data_efficiency as de
     from somato.training.data_efficiency import run_data_efficiency
     from somato.utils.config import save_yaml
+
+    seen_lr, real_run = {}, de.run_experiment
+
+    def spy(cfg, store, **kw):
+        seen_lr[cfg.name.split("/")[0]] = cfg.train.lr
+        return real_run(cfg, store, **kw)
+
+    monkeypatch.setattr(de, "run_experiment", spy)
 
     save_yaml({"name": "base", "dataset": str(dataset_dir), "sensors": IDEAL, "window": 6, "stride": 6,
                "eval_stride": 6, "split": [1 / 3, 1 / 3, 1 / 3],
                "train": {"epochs": 1, "batch_size": 4, "output_steps": 2}}, tmp_path / "base.yaml")
     save_yaml({"base": str(tmp_path / "base.yaml"), "output_dir": str(tmp_path / "out"), "fractions": [0.5, 1.0],
                "seeds": [0], "match_params": True, "reference_model": "hier",
-               "models": {"hier": TINY_MODEL, "flat": {"architecture": "flat_recurrent", "hidden": 8}}},
+               "models": {"hier": TINY_MODEL, "flat": {"model": {"architecture": "flat_recurrent", "hidden": 8},
+                                                       "train": {"lr": 0.003}}}},
               tmp_path / "study.yaml")
     results = run_data_efficiency(tmp_path / "study.yaml")
     assert len(results) == 4
+    assert seen_lr == {"hier": 1e-3, "flat": 0.003}  # per-model training overrides reach each run
     params = {r["model"]: r["params"] for r in results}
     assert abs(params["flat"] - params["hier"]) / params["hier"] < 0.15
     assert (tmp_path / "out" / "summary.md").exists() and (tmp_path / "out" / "results.csv").exists()
