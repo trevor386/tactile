@@ -128,6 +128,22 @@ def test_input_groups_ablation(tmp_path, dataset_dir, store, groups):
         assert 0.0 <= run_experiment(cfg, store, verbose=False)["test/terrain/acc_last"] <= 1.0
 
 
+def test_loader_workers_reproducible_and_reseeded(store):
+    """With worker processes, crops are reproducible for a seed and still change from epoch to epoch."""
+    from somato.training.trainer import Trainer, TrainConfig
+
+    def epochs(seed):
+        ds = WindowDataset(store, list(range(10)), 5, 3, random_offset=True, generator=torch.Generator().manual_seed(0))
+        t = Trainer.__new__(Trainer)
+        t.cfg, t.device = TrainConfig(num_workers=2, batch_size=4, seed=seed), torch.device("cpu")
+        loader = t._loader(ds, shuffle=False)
+        return [torch.cat([b["body_pos"] for b in loader]) for _ in range(2)]
+
+    a, b = epochs(0), epochs(0)
+    assert torch.equal(a[0], b[0]) and torch.equal(a[1], b[1])  # reproducible
+    assert not torch.equal(a[0], a[1])  # jitter differs between epochs
+
+
 def test_property_regression_task_transforms():
     t = PropertyRegressionTask("props", targets=["friction", "sinkage_mm"], log_targets=["sinkage_mm"])
     vals = torch.tensor([[0.1, 0.05], [0.5, 5.0], [0.9, 15.0]])

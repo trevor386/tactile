@@ -21,6 +21,7 @@ train:
   batch_size: 32
   lr: 1.0e-3
   amp: bf16
+  num_workers: 4      # loader prefetch (per-worker crop RNG); E-1 ran with 0, equivalent up to random crops
   output_steps: 4
   select_metric: terrain/acc_last
 augment:

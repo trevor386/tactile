@@ -59,6 +59,14 @@ def detach_state(state: Any) -> Any:
     return state
 
 
+def _reseed_worker(worker_id: int) -> None:
+    """Give each data-loader worker its own crop-jitter generator (a forked worker would otherwise repeat the parent's
+    random sequence in every worker); seeded from the loader's per-worker seed, so runs stay reproducible."""
+    info = torch.utils.data.get_worker_info()
+    if getattr(info.dataset, "generator", None) is not None:
+        info.dataset.generator = torch.Generator().manual_seed(info.seed % 2**63)
+
+
 def resolve_device(device: str) -> torch.device:
     if device == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,8 +84,10 @@ class Trainer:
 
     def _loader(self, ds: Dataset, shuffle: bool) -> DataLoader:
         gen = torch.Generator().manual_seed(self.cfg.seed)
-        return DataLoader(ds, batch_size=self.cfg.batch_size, shuffle=shuffle, num_workers=self.cfg.num_workers,
-                          drop_last=False, generator=gen, pin_memory=self.device.type == "cuda")
+        workers = self.cfg.num_workers
+        return DataLoader(ds, batch_size=self.cfg.batch_size, shuffle=shuffle, num_workers=workers,
+                          drop_last=False, generator=gen, pin_memory=self.device.type == "cuda",
+                          worker_init_fn=_reseed_worker if workers else None, persistent_workers=workers > 0)
 
     @torch.no_grad()
     def fit_normalizers(self, ds: Dataset) -> None:

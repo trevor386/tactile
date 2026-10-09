@@ -131,7 +131,7 @@ Avoid very long runs until the earlier steps are sound.
 | T-13 | Uneven terrain: mjlab heightfields per env; the taxel contact model must query the terrain height under each taxel (it assumes a plane today). | E-16 | queued |
 | T-14 | Further realism, in order of expected impact: (a) snow plasticity (sinkage that does not recover) and ploughing/berm drag on laterally moving links; (b) static friction and stick-slip; (c) temperature effects on the sensor; (d) taxel crosstalk and load sharing through the skin. | H-3 | queued |
 | T-15 | Literature review of the somatosensory system (receptor types SA/RA, dorsal-column pathways, somatotopy, cortical integration) for architecture ideas; only after E-2 gives evidence. | E-17 | queued |
-| T-16 | Speed: data-loader prefetch (workers need per-worker reseeding of the crop jitter); optionally a fused FSR kernel. | throughput | queued |
+| T-16 | Speed: data-loader prefetch (workers need per-worker reseeding of the crop jitter); optionally a fused FSR kernel. | throughput | loader done 2026-10-08: persistent workers with per-worker reseeding (tested reproducible and varying per epoch); 70 → 13 ms per batch on the CPU, hidden behind GPU compute; `num_workers: 4` in `terrain_v1.yaml` from E-1b on (E-1 used 0). Fused FSR kernel still optional. |
 | T-17 | TBPTT failure with 6 chunks per sequence (from v0): test 3 and 4 chunks and more distinct sequences per epoch. | E-18 | queued |
 | T-18 | Disk hygiene: delete v0 datasets, their caches and the 600_dc cache (4 GB) once no experiment needs them. | — | queued |
 
