@@ -13,6 +13,33 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-14. E-1, first half: at 10 % of the data the structured model leads both baselines (interim, one seed).**
+*Why:* signs of life on simulation v1 and a first test of H-1. *Setup:* `configs/experiments/v1_signs_of_life.yaml`,
+170 training episodes, 3,000 steps (protocol v4), widths matched (~636k), 360-episode test set (SE ≈ ±2.6 points at
+0.6). `scripts/analysis/summarize_study.py runs/v1/signs_of_life`.
+*Result:*
+
+| model | acc | NLL | best/total steps | glare | rough | packed | fresh | concrete |
+|---|---|---|---|---|---|---|---|---|
+| somato_v1 | **0.630** | **1.12** | 3000/3010 | 0.50 | **0.56** | 0.54 | 0.91 | **0.60** |
+| transformer | 0.506 | 1.53 | 3010/3010 | 0.28 | 0.42 | 0.53 | 0.92 | 0.35 |
+| flat_gru | 0.492 | 4.02 | 2500/3010 | 0.39 | 0.28 | 0.42 | 0.85 | 0.51 |
+
+*Evidence:*
+* Every model trains; the brain head learns from the first evaluation (val 0.49 at 250 steps, no plateau).
+* The somato lead is 12–14 points (~4–5 SE) and spread over classes: rough ice +14/+27 (cm-scale relief, a spatial
+  cue), glare ice and concrete +10 to +25. All models get fresh snow (0.85–0.92): the physical sinkage cue is learnable
+  without a spatial bias, unlike v0's synthetic footprint (H-3 concern addressed).
+* The flat GRU is badly overconfident (NLL 4.0, as in v0); the transformer is calibrated reasonably.
+
+*Caveats:*
+* One seed.
+* somato_v1 and the transformer were still improving at the end (best step = last evaluation), so 3,000 steps may
+  under-train them at 10 % (E-1b).
+* The ceiling is ~0.92 with realistic noise (F-13), so there is room above all three.
+
+*Implication:* signs of life for H-1 at low data. Wait for full data and seeds before drawing conclusions.
+
 **F-13. Bayes ceilings: catalog v1 needs every cue type; v0 was solvable from friction + the synthetic sinkage.**
 *Why:* interpret E-1 and check what the task rewards (T-6).
 *Setup:* `scripts/analysis/task_ceiling.py`, k-NN (k 25) on 40k sampled parameter vectors per catalog. "Felt roughness" is

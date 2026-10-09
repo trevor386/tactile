@@ -47,7 +47,8 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
 
 | ID | what | started | config / output | status |
 |---|---|---|---|---|
-| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running (first eval: somato_v1 val 0.49 at 250 steps, no plateau) |
+| E-1 | Signs of life: somato_v1 / flat_gru / transformer at 10 % and 100 %, seed 0 | 2026-10-08 21:09 | `configs/experiments/v1_signs_of_life.yaml` → `runs/v1/signs_of_life/`, log `runs/logs/v1_signs_of_life.log` | running: 10 % done (F-14: somato 0.630, transformer 0.506, flat 0.492); 100 % runs until ~23:00 |
+| queue v1a | E-13 (slide proxy), then E-3+E-4 (structure ablations); starts when E-1 ends | 2026-10-08 21:30 (waiting) | `runs/logs/queue_v1a.sh`, log `runs/logs/queue_v1a.log`; outputs `runs/v1/proxy_slide/`, `runs/v1/structure_ablations/` | waiting for E-1 (~7 h after it starts) |
 
 ## 2. Hypotheses and conjectures
 
