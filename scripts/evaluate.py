@@ -14,7 +14,10 @@ import torch
 
 from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split
 from somato.geometry import LayoutInfo
-from somato.training.experiment import ExperimentConfig, build_suite, load_trained_model, prepare_store_for_tasks
+from somato.models.builder import parse_model_config
+from somato.training.experiment import (
+    ExperimentConfig, build_suite, check_window_stride, load_trained_model, prepare_store_for_tasks,
+)
 from somato.training.prepare import BatchPreparer
 from somato.training.tasks import ClassificationTask, build_tasks
 from somato.training.trainer import Trainer, resolve_device
@@ -47,6 +50,7 @@ def main():
     cfg.train.tbptt_chunk = 0  # always: fresh state, one pass over the window, metrics at its end
     if args.window:
         cfg.window = cfg.eval_stride = args.window
+    check_window_stride(parse_model_config(ckpt["model_cfg"]), cfg.window)
     if args.batch_size:
         cfg.train.batch_size = args.batch_size
     names = store.meta.terrain_names

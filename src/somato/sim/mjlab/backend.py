@@ -45,6 +45,8 @@ class MjlabBackend(SimBackend):
     def __init__(self, desc: RobotDescription, layout: SensorLayout, catalog: TerrainCatalog,
                  cfg: MjlabSnakeConfig | None = None, generator: torch.Generator | None = None):
         self.cfg = cfg = cfg or MjlabSnakeConfig()
+        if cfg.gravity != 9.81 and not cfg.use_native_imu:
+            raise ValueError("gravity != 9.81 needs use_native_imu (the stimulus pipeline's IMU assumes 9.81 m/s^2)")
         self.desc, self.layout, self.catalog, self.generator = desc, layout, catalog, generator
         self._imu_groups = [n for n, g in layout.groups.items() if g.kind == "imu"] if cfg.use_native_imu else []
         self.scene = Scene(self._scene_cfg(), cfg.device)
@@ -182,7 +184,9 @@ class MjlabBackend(SimBackend):
             m.pair_friction[ids, :, 1] = mu
             m.pair_solref[ids, :, 0] = self._terrain.contact_timeconst[ids][:, None]
             m.pair_solref[ids, :, 1] = self._terrain.contact_dampratio[ids][:, None]
-            m.pair_solimp[ids, :, 0] = self._terrain.contact_dmin[ids][:, None]
+            dmin = self._terrain.contact_dmin[ids][:, None]
+            m.pair_solimp[ids, :, 0] = dmin
+            m.pair_solimp[ids, :, 1] = dmin.clamp_min(0.95)  # dmax (MuJoCo default 0.95) must not be below dmin
             m.pair_solimp[ids, :, 2] = self._terrain.contact_width[ids][:, None]
         else:
             self.sim.model.geom_friction[ids[:, None], self._geom_ids[None, :], 0] = mu

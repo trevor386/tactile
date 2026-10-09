@@ -126,6 +126,9 @@ class BackendValidator:
         E = self.backend.num_envs
         if classes is None or E < 2:
             return
+        if not getattr(self.backend, "_num_pairs", 0):  # only mjlab with terrain_compliance enacts compliance
+            self._add("soft_terrain_sinks_deeper", None, detail="backend does not enact terrain compliance")
+            return
         runner = self._runner(_Constant(self._zeros()))
         cls = torch.tensor([classes[i % 2] for i in range(E)])
         runner.reset(terrain_class=cls)

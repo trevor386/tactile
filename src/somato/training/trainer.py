@@ -171,6 +171,9 @@ class Trainer:
                 for chunk in self._chunks(self.preparer(sample, train=True)):
                     with self._autocast():
                         outputs, state = self.model(chunk, state, output_steps=cfg.output_steps)
+                        if not outputs:  # no brain step in this chunk (brain_stride > 1): only the state advances
+                            state = detach_state(state)
+                            continue
                         loss, parts = self._loss(outputs, chunk)
                     opt.zero_grad(set_to_none=True)
                     loss.backward()
@@ -210,6 +213,8 @@ class Trainer:
             for chunk in self._chunks(self.preparer(sample, train=False)):
                 with self._autocast():
                     outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
+                    if not outputs:  # no brain step in this chunk
+                        continue
                     loss, _ = self._loss(outputs, chunk)
                 outputs = {k: v.float() for k, v in outputs.items()}
                 B = chunk.batch_size
@@ -231,6 +236,8 @@ class Trainer:
             for chunk in self._chunks(self.preparer(sample, train=False)):
                 with self._autocast():
                     outputs, state = self.model(chunk, state, output_steps=self.cfg.output_steps)
+                if not outputs:
+                    continue
                 pred = task.predict(outputs).cpu()
                 y = chunk.labels[task.label].long().cpu()
                 cm.index_put_((y, pred), torch.ones_like(y), accumulate=True)

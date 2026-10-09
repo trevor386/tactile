@@ -263,6 +263,28 @@ def test_brain_head_stride_and_streaming(small_desc, small_layout, small_info):
     assert torch.allclose(torch.cat(outs, 1), full["terrain"], atol=1e-5)
 
 
+def test_group_spatial_override_beats_base_k_per_group():
+    from somato.models import parse_model_config
+    cfg = parse_model_config({"spatial": {"graph": {"k": 24, "k_per_group": {"tactile": 12, "joint": 2}}},
+                              "spatial_overrides": {"tactile": {"graph": {"k": 30}}}})
+    assert cfg.group_spatial("tactile").graph.k == 30  # explicit override wins
+    assert cfg.group_spatial("joint").graph.k == 2  # base per-group entry
+    assert cfg.group_spatial("imu").graph.k == 24 and cfg.group_spatial("imu").graph.k_per_group is None
+
+
+def test_per_step_labels_follow_brain_steps(small_desc, small_layout, small_info):
+    """With brain_stride 2 the predictions of a 6-step window belong to steps 3 and 5, and per-step tasks use those."""
+    from somato.training.tasks import PerBodyRegressionTask
+    torch.manual_seed(0)
+    m = build_model(dict(SMALL_MODEL, brain_stride=2), GROUPS).eval()
+    batch = make_batch(small_desc, small_layout, small_info, L=6)
+    batch.labels["slip_speed"] = torch.arange(6.0)[None, :, None].expand(2, 6, len(small_desc.bodies))
+    out, _ = m(batch, output_steps=2)
+    assert out["steps"][0].tolist() == [3, 5]
+    _, target = PerBodyRegressionTask("slip")._pair(out, batch)
+    assert target[0, :, 0].tolist() == [3.0, 5.0]
+
+
 def test_brain_model_invariance_masking_and_transfer(small_desc, small_layout, small_info):
     torch.manual_seed(0)
     m = build_model(BRAIN_MODEL, GROUPS).eval()

@@ -64,7 +64,11 @@ class PerBodyRegressionTask(Task):
 
     def _pair(self, outputs, batch):
         pred = outputs[self.head][..., 0]  # [B, k, Nb]
-        target = batch.labels[self.label][:, -pred.shape[1]:]
+        labels = batch.labels[self.label]
+        if "steps" in outputs:  # the latent steps the model predicted at (brain_stride > 1: not the last k)
+            target = labels[:, outputs["steps"][0].long()]
+        else:
+            target = labels[:, -pred.shape[1]:]
         if target.shape != pred.shape:
             raise ValueError(f"Per-body prediction {tuple(pred.shape)} does not match label {tuple(target.shape)}; "
                              "use cluster_mode 'body' with sensors on every body")

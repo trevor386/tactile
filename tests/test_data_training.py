@@ -238,6 +238,19 @@ def test_truncated_bptt_experiment(tmp_path, dataset_dir, store):
     assert ckpt["experiment"]["train"]["tbptt_chunk"] == 4 and ckpt["experiment"]["train_sequence"] == 12
 
 
+def test_brain_stride_chunks_without_brain_step_and_window_check(tmp_path, dataset_dir, store):
+    """9-step sequences in 4-step chunks with brain_stride 4: the last 1-step chunk (step 8) has no brain step and
+    must be skipped, not crash; a window that is not a multiple of the stride is rejected."""
+    model = dict(TINY_MODEL, brain_stride=4)
+    cfg = ExperimentConfig(name="stride", dataset=str(dataset_dir), output_dir=str(tmp_path), model=model,
+                           sensors=IDEAL, train=TrainConfig(epochs=1, batch_size=4, output_steps=1), window=4,
+                           stride=4, train_sequence=9, split=(1 / 3, 1 / 3, 1 / 3), save_checkpoint=False)
+    assert 0.0 <= run_experiment(cfg, store, verbose=False)["test/terrain/acc_last"] <= 1.0
+    with pytest.raises(ValueError, match="brain_stride"):
+        run_experiment(ExperimentConfig(name="bad", dataset=str(dataset_dir), output_dir=str(tmp_path), model=model,
+                                        sensors=IDEAL, window=6, split=(1 / 3, 1 / 3, 1 / 3)), store, verbose=False)
+
+
 def test_data_efficiency_study(tmp_path, dataset_dir):
     from somato.training.data_efficiency import run_data_efficiency
     from somato.utils.config import save_yaml

@@ -91,6 +91,13 @@ def resolve_config_refs(cfg: ExperimentConfig) -> ExperimentConfig:
     return cfg
 
 
+def check_window_stride(model_cfg, window: int) -> None:
+    """Windows must end on a brain step, or window-level metrics would be read at an earlier step."""
+    stride = getattr(model_cfg, "brain_stride", 1)
+    if window % stride:
+        raise ValueError(f"window {window} is not a multiple of the model's brain_stride {stride}")
+
+
 def prepare_store_for_tasks(store: EpisodeStore, tasks: list) -> None:
     """Add the derived episode labels the tasks need (e.g. measured sinkage for property regression)."""
     if any(isinstance(t, PropertyRegressionTask) and "sinkage_mm" in t.targets for t in tasks):
@@ -143,6 +150,7 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     suite = build_suite(store, cfg.sensors)
     groups = group_specs(store, suite)
     model_cfg = parse_model_config(copy.deepcopy(cfg.model) if isinstance(cfg.model, dict) else cfg.model)
+    check_window_stride(model_cfg, cfg.window)
     task_list = build_tasks(cfg.tasks)
     prepare_store_for_tasks(store, task_list)
     for t in task_list:  # standardize regression targets on the training episodes; keep the stats for evaluation

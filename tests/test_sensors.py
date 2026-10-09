@@ -56,6 +56,8 @@ def test_fsr_rate_independent_hysteresis_and_per_taxel_params():
         v = m(x)[0][0, :, 0, 0]
         mid = T // 2  # same force on the way up (mid) and down (2T - 1 - mid)
         assert abs(float(v[2 * T - 1 - mid] - v[mid]) - 0.1) < 0.02
+        assert float(v[-1]) < 1e-3  # the loop closes at zero load: no residual offset after the contact
+        assert float(v[T // 10]) > 0.0  # and no dead zone for a light load
     m2 = SENSOR_MODELS.build("fsr", dt=1e-3, tau_unload=[0.02, 0.1], hysteresis=[0.07, 0.17])
     st = m2.init_state(torch.rand(2, 10, 50, 3) * 2e4, torch.Generator().manual_seed(0))
     assert st["a_unload"].std() > 0 and 0.07 <= float(st["play_width"].min()) <= float(st["play_width"].max()) <= 0.17

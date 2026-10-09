@@ -67,13 +67,17 @@ class ModelConfig:
 
     def group_spatial(self, group: str) -> SpatialConfig:
         """Stage-2 config of one group in segregated mode (an override that changes the operator type does not
-        inherit the default operator's ``params``, which are type-specific)."""
+        inherit the default operator's ``params``, which are type-specific; the base's ``k_per_group`` entry for the
+        group becomes its ``k`` before the override, so an override's own ``graph.k`` wins)."""
         base, over = asdict(self.spatial), self.spatial_overrides.get(group, {})
+        if base["graph"].get("k_per_group"):
+            base["graph"]["k"] = base["graph"]["k_per_group"].get(group, base["graph"]["k"])
+            base["graph"]["k_per_group"] = None
         merged = deep_merge(base, over)
         if over.get("type", base["type"]) != base["type"]:
             merged["params"] = dict(over.get("params", {}))
         cfg = from_dict(SpatialConfig, merged)
-        if cfg.graph.k_per_group:
+        if cfg.graph.k_per_group:  # given in the override itself
             cfg.graph.k = cfg.graph.k_per_group.get(group, cfg.graph.k)
             cfg.graph.k_per_group = None
         return cfg
@@ -156,8 +160,9 @@ class HierarchicalSomatoModel(nn.Module):
             return_features: also return the stage-2 node features under ``"features"``.
 
         Returns:
-            ``(outputs, state)`` where ``outputs[task]`` is ``[B, k, ...]``; empty when no brain step falls in
-            this call (streaming with ``brain_stride > 1``).
+            ``(outputs, state)`` where ``outputs[task]`` is ``[B, k, ...]`` and ``outputs["steps"]`` ``[B, k]`` the
+            latent steps (indices into this call's ``L``) the predictions belong to, for per-step labels; empty when
+            no brain step falls in this call (streaming or truncated BPTT with ``brain_stride > 1``).
         """
         h, tstate = self.encode_temporal(batch, state)
         B, L, N, D = h.shape
@@ -183,6 +188,7 @@ class HierarchicalSomatoModel(nn.Module):
             outputs[name] = out[:, k - n_out:]
         if return_features:
             outputs["features"] = hs[:, k - n_out:]
+        outputs["steps"] = idx[k - n_out:].expand(B, -1)
         return outputs, new_state
 
 

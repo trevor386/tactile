@@ -67,6 +67,8 @@ class FSRTactile(SensorModel):
     * Rate-independent hysteresis (``hysteresis``, a fraction of full scale, or a per-taxel uniform range): a play
       operator on the output, which moves only once the input leaves a band of that width around it, so loading
       and unloading curves differ by the band whatever the speed (measured 7-17 % for FSRs, varying per sensor).
+      The band narrows to zero as the output goes to zero, so the loop closes at no load (no residual offset after
+      a contact ends and no dead zone for light contacts).
     * Additive noise, ADC quantization.
 
     Shear is not sensed. Output channel: ``fsr_v`` in [0, 1].
@@ -130,11 +132,13 @@ class FSRTactile(SensorModel):
             torch.add(load, creep, alpha=self.creep_frac, out=eff[..., t, :])
         v = self._transfer(eff, gain.unsqueeze(-2))
         new_state = {**state, "load": load, "creep": creep}
-        if "play" in state:  # rate-independent hysteresis: play operator of width w
-            half, y = 0.5 * state["play_width"], state["play"]
+        if "play" in state:  # rate-independent hysteresis: play operator of width w, closing at zero load
+            w, y = state["play_width"], state["play"]
             out = torch.empty_like(v)
             for t in range(v.shape[-2]):
-                y = torch.minimum(torch.maximum(y, v[..., t, :] - half), v[..., t, :] + half)
+                vt = v[..., t, :]
+                half = 0.5 * torch.minimum(vt, w)  # the band shrinks to 0 at zero output: the loop closes there
+                y = torch.minimum(torch.maximum(y, vt - half), vt + half)
                 out[..., t, :] = y
             v, new_state["play"] = out, y
         if self.noise_std > 0:

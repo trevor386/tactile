@@ -52,6 +52,8 @@ def main():
     for t in range(args.steps):
         frame = source.read()
         out = online.step(frame)
+        if not out:  # brain_stride > 1: no prediction before the first brain step
+            continue
         pred = out["terrain"].argmax(-1)
         truth = frame.labels["terrain"].to(pred.device)
         correct.append((pred == truth).float().mean().item())
