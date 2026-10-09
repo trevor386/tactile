@@ -13,6 +13,26 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-20. E-19b: a residual memory does not rescue the brain head; the main studies use the pool head.**
+*Setup:* `configs/experiments/e19b_brain_residual.yaml`, as E-19.
+*Result:*
+
+| stage 3 | proxy (84 eps) | terrain (170 eps) |
+|---|---|---|
+| brain + residual memory | 0.562 (stall to step ~250, then memorizes) | 0.621 |
+| brain + residual memory + node-pool path | 0.247 (ln 4 for the whole run) | 0.625 |
+| pool, from F-19 for reference | 0.985 | 0.612 |
+
+*Evidence:* adding the node-pool path (the pool head's exact input) to the brain makes the stall *worse*. So the
+problem is not only the GRU; something in how the brain's fused representation trains on sparse moving stimuli. Not
+resolved.
+*Implication:*
+* E-1c and E-2 use the **static pool head**: robust on both tasks and tied on terrain.
+* The brain (dynamic, geometry-aware, recurrent stage 3) becomes a research task (T-19). The user expects stage 3 to
+  grow into a locomotion controller anyway.
+* The structure spectrum for the main study: receptor-only (stage 1 + pool), somato_pool (+ 3D kernel), flat GRU,
+  transformer.
+
 **F-19. E-19: the brain head's stall comes from its GRU.** *Why:* F-17 (brain stalls, then memorizes on the slide
 proxy). *Setup:* `configs/experiments/e19_brain_diagnostics.yaml`; stages 1–2 identical (dim 64, no width matching),
 only stage 3 varies; slide proxy at 84 episodes and terrain at 170; seed 0.

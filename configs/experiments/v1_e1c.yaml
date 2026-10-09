@@ -1,0 +1,17 @@
+# E-1c: baseline fairness before E-2. The models of the main study, at 10 % and 100 % of the training episodes, seed 0,
+# widths matched to somato_v1_pool; run once per learning rate (3e-4, 1e-3, 3e-3):
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e1c.yaml \
+#       --set base_overrides.train.lr=3e-4 output_dir=runs/v1/e1c_lr3e-4
+# Stage 3 is the static pool head (F-19, F-20: the brain head is unreliable; kept as a research task).
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/e1c
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: configs/models/somato_v1_pool.yaml
+  receptor_only: configs/models/somato_v1_receptor.yaml
+  flat_gru: configs/models/flat_gru.yaml
+  transformer: configs/models/transformer.yaml

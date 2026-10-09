@@ -1,0 +1,11 @@
+# Receptor-only end of the structure spectrum (H-14): stage 1 (one receptor encoder per modality, shared by all its
+# sensors) followed directly by mean+max pooling over all sensors and an MLP; no stage-2 spatial interaction, no brain.
+# Differs from somato_v1_pool only by the missing 3D kernel.
+architecture: hierarchical
+dim: 64
+fusion: segregated
+brain_stride: 5
+temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+spatial: {type: none, num_layers: 2}
+heads:
+  terrain: {type: global, pool: meanmax, hidden: 128}
