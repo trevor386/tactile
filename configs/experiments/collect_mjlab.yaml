@@ -1,0 +1,35 @@
+# mjlab (MuJoCo-Warp) data collection, simulation v1: terrain catalog v1 (physical compliance and widened friction,
+# configs/terrains/ice_snow_v1.yaml), explicit compliant contact pairs with stiff friction, skin-filtered texture.
+#   python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab.yaml
+# (v0, matched to collect_isaac.yaml: configs/archive/v0/experiments/collect_mjlab.yaml)
+robot: configs/robots/snake_3d.yaml
+terrains: configs/terrains/ice_snow_v1.yaml
+out: datasets/mjlab_v1_600
+seed: 0
+num_envs: 100
+rounds: 6                 # episodes = rounds * num_envs
+steps_per_episode: 150    # latent steps (3 s at 50 Hz)
+warmup_steps: 50          # let the snake settle and the gait ramp up
+rates:
+  physics_hz: 1000
+  control_hz: 100
+  latent_hz: 50
+  sensors: {tactile: 500, joint: 250, imu: 250}
+gait:
+  kind: sidewinding       # geom friction is isotropic in MuJoCo too
+  yaw_amplitude: [0.5, 0.9]
+  pitch_amplitude: [0.15, 0.3]
+  frequency: [0.4, 1.0]
+contact:
+  mode: hybrid
+  texture_filter: 0.0035  # texture as felt through a 2 mm skin and 1 cm taxels (sigma ~3.5 mm)
+mjlab:
+  env_spacing: 4.0
+  actuator: dc_motor      # same torque-speed curve as collect_isaac.yaml
+  stiffness: 20.0
+  damping: 0.5
+  effort_limit: 6.0       # continuous torque [Nm]
+  saturation_effort: 12.0 # stall torque [Nm]
+  velocity_limit: 8.0     # no-load speed [rad/s]
+  terrain_compliance: true      # per-env normal compliance from the terrain catalog, stiff friction rows
+  friction_solref: [0.02, 1.0]

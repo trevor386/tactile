@@ -15,8 +15,9 @@ def make_mjlab_runner(cfg: CollectConfig, device: str, generator: torch.Generato
     desc, layout = build_robot(cfg.robot)
     catalog = cfg.catalog()
     overrides = dict(cfg.mjlab)
-    if "contact_solref" in overrides:
-        overrides["contact_solref"] = tuple(overrides["contact_solref"])
+    for key in ("contact_solref", "friction_solref"):
+        if key in overrides:
+            overrides[key] = tuple(overrides[key])
     mcfg = MjlabSnakeConfig(**{**overrides, "num_envs": cfg.num_envs, "physics_dt": 1.0 / cfg.rates.physics_hz,
                                "device": device})
     backend = MjlabBackend(desc, layout, catalog, mcfg, generator)

@@ -48,6 +48,7 @@ class MjlabBackend(SimBackend):
         self.desc, self.layout, self.catalog, self.generator = desc, layout, catalog, generator
         self._imu_groups = [n for n, g in layout.groups.items() if g.kind == "imu"] if cfg.use_native_imu else []
         self.scene = Scene(self._scene_cfg(), cfg.device)
+        self._num_pairs = self._add_terrain_pairs(self.scene.spec) if cfg.terrain_compliance else 0
         sim_cfg = SimulationCfg(
             nconmax=cfg.nconmax, njmax=cfg.njmax,
             mujoco=MujocoCfg(timestep=cfg.physics_dt, solver=cfg.solver, iterations=cfg.iterations,
@@ -55,7 +56,8 @@ class MjlabBackend(SimBackend):
         )
         self.sim = Simulation(num_envs=cfg.num_envs, cfg=sim_cfg, spec=self.scene.spec, device=cfg.device)
         self.scene.initialize(self.sim.mj_model, self.sim.model, self.sim.data)
-        self.sim.expand_model_fields(("geom_friction",))
+        self.sim.expand_model_fields(("pair_friction", "pair_solref", "pair_solimp") if self._num_pairs
+                                     else ("geom_friction",))
         self.robot = self.scene[ROBOT]
         self._device = torch.device(cfg.device)
         self._body_names = list(self.robot.body_names)
@@ -112,6 +114,20 @@ class MjlabBackend(SimBackend):
                         terrain=TerrainEntityCfg(terrain_type="plane"),
                         entities={ROBOT: robot}, sensors=tuple(sensors))
 
+    def _add_terrain_pairs(self, spec: mujoco.MjSpec) -> int:
+        """Replace robot-ground geom collisions by one explicit contact pair per robot geom (per-env parameters)."""
+        cfg = self.cfg
+        if cfg.self_collision:
+            raise ValueError("terrain_compliance disables the robot geoms' dynamic collisions; self_collision would need "
+                             "explicit pairs too")
+        robot_geoms = [g for g in spec.geoms if g.name.startswith(f"{ROBOT}/")]
+        for g in robot_geoms:
+            g.contype, g.conaffinity = 0, 0  # contacts come only from the pairs below
+            spec.add_pair(name=f"terrain_{g.name.split('/')[-1]}", geomname1=g.name, geomname2="terrain", condim=3,
+                          friction=[1.0, 1.0, 0.005, 0.0001, 0.0001], solref=list(cfg.contact_solref),
+                          solreffriction=list(cfg.friction_solref), margin=cfg.contact_margin, gap=cfg.contact_gap)
+        return len(robot_geoms)
+
     def _actuator_cfg(self) -> IdealPdActuatorCfg:
         cfg = self.cfg
         common = dict(target_names_expr=tuple(re.escape(j) for j in self.desc.joint_names), stiffness=cfg.stiffness,
@@ -158,7 +174,17 @@ class MjlabBackend(SimBackend):
         self._terrain.update(ids, self.catalog.sample(terrain_class, self.generator, self._device))
         self.sim.reset(ids)
         self.scene.reset(ids)
-        self.sim.model.geom_friction[ids[:, None], self._geom_ids[None, :], 0] = self._terrain.friction[ids][:, None]
+        mu = self._terrain.friction[ids][:, None]
+        if self._num_pairs:
+            m = self.sim.model
+            m.pair_friction[ids, :, 0] = mu
+            m.pair_friction[ids, :, 1] = mu
+            m.pair_solref[ids, :, 0] = self._terrain.contact_timeconst[ids][:, None]
+            m.pair_solref[ids, :, 1] = self._terrain.contact_dampratio[ids][:, None]
+            m.pair_solimp[ids, :, 0] = self._terrain.contact_dmin[ids][:, None]
+            m.pair_solimp[ids, :, 2] = self._terrain.contact_width[ids][:, None]
+        else:
+            self.sim.model.geom_friction[ids[:, None], self._geom_ids[None, :], 0] = mu
 
         root = self.robot.data.default_root_state[ids].clone()
         root[:, :3] += self.scene.env_origins[ids]

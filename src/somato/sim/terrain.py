@@ -42,6 +42,14 @@ class TerrainClass:
     texture_wavelength: Range = (0.003, 0.003)  # m
     undulation_amp: Range = (0.0, 0.0)  # relative load variation from macro unevenness
     undulation_wavelength: Range = (0.2, 0.2)  # m
+    # Normal contact compliance, enacted by the mjlab backend with `terrain_compliance` (MuJoCo soft contact): solref
+    # time constant [s] and damping ratio, and the solimp impedance, which rises from `contact_dmin` at the surface to
+    # 0.95 at `contact_width` [m] of penetration. A low surface impedance over a wide transition is a ground that
+    # yields quickly and stiffens with depth (the robot physically sinks in); MuJoCo's default is (0.9, 1 mm).
+    contact_timeconst: Range = (0.02, 0.02)
+    contact_dampratio: Range = (1.0, 1.0)
+    contact_dmin: Range = (0.9, 0.9)
+    contact_width: Range = (0.001, 0.001)
 
 
 SAMPLED = [f.name for f in fields(TerrainClass) if f.name != "name"]

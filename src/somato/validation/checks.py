@@ -85,6 +85,26 @@ class BackendValidator:
         p = getattr(self.backend, "payload", None)
         return torch.ones(self.backend.num_envs, device=self.backend.device) if p is None else p
 
+    def _compliance_classes(self) -> tuple[int, int] | None:
+        """``(stiffest, softest)`` class indices when the catalog's classes differ in contact compliance, else None.
+
+        Compliant terrain (simulation v1) is physically penetrated, so the checks that assume a rigid support (taxels
+        at ground level at rest) run on the stiffest class.
+        """
+        catalog = getattr(self.backend, "catalog", None)
+        if catalog is None or not hasattr(catalog.classes[0], "contact_dmin"):
+            return None
+        # Softness grows with the impedance transition width and time constant and falls with the surface impedance.
+        soft = [sum(c.contact_width) * sum(c.contact_timeconst) * (2 - sum(c.contact_dmin) / 2) for c in catalog.classes]
+        if max(soft) - min(soft) < 1e-12:
+            return None
+        return min(range(len(soft)), key=soft.__getitem__), max(range(len(soft)), key=soft.__getitem__)
+
+    def _capsule_depth(self, state) -> torch.Tensor:
+        """``[E, Nb]`` depth of each body's lowest capsule point below the ground (m; negative above it)."""
+        radius = max((s.size.get("radius", 0.0) for b in self.desc.bodies for s in b.shapes), default=0.0)
+        return self.backend.terrain.ground_height[:, None] - (state.body_pos[..., 2] - radius)
+
     # ------------------------------------------------------------------ checks
     def run(self) -> list[CheckResult]:
         self.results = []
@@ -95,13 +115,37 @@ class BackendValidator:
             self._add("names_match", False, detail=str(e))
             return self.results
         self.check_static()
+        self.check_compliance()
         self.check_joint_tracking()
         self.check_gait()
         return self.results
 
+    def check_compliance(self) -> None:
+        """On compliant terrain catalogs: the softest class is physically penetrated more than the stiffest."""
+        classes = self._compliance_classes()
+        E = self.backend.num_envs
+        if classes is None or E < 2:
+            return
+        runner = self._runner(_Constant(self._zeros()))
+        cls = torch.tensor([classes[i % 2] for i in range(E)])
+        runner.reset(terrain_class=cls)
+        for _ in range(self.settle_steps):
+            runner.step_latent()
+        state = self.backend.get_state()
+        touching = state.contact_normal_force > 1e-3
+        depth = (self._capsule_depth(state) * touching).sum(1) / touching.sum(1).clamp_min(1)
+        stiff, soft = float(depth[cls == classes[0]].mean()), float(depth[cls == classes[1]].mean())
+        self._add("soft_terrain_sinks_deeper", soft > 2 * max(stiff, 0.0) and soft > 5e-4, soft,
+                  "> 2x the stiffest class and > 0.5 mm",
+                  f"resting sinkage of loaded capsules: softest class {1e3 * soft:.2f} mm, stiffest {1e3 * stiff:.2f} mm")
+
     def check_static(self) -> None:
         runner = self._runner(_Constant(self._zeros()))
-        runner.reset()
+        classes = self._compliance_classes()
+        if classes is None:
+            runner.reset()
+        else:  # rigid-support checks on the stiffest terrain; compliance is checked separately
+            runner.reset(terrain_class=torch.full((self.backend.num_envs,), classes[0], dtype=torch.long))
         frames = [runner.step_latent() for _ in range(self.settle_steps)]
         f = frames[-1]
         state = self.backend.get_state()

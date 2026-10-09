@@ -1,0 +1,66 @@
+# Terrain catalog v1 (2026-10-08): classes differ in physically enacted properties, not in a synthetic taxel cue.
+#
+# * Friction: one Coulomb coefficient per episode (MuJoCo), ranges widened to cover cold conditions, where ice is
+#   much grippier than near melting (docs/references/sensor_terrain_calibration.md, section 4: rubber on ice 0.05
+#   near 0 C to 0.4-0.85 at -10 to -25 C; silicone likely at the low end). Friction alone therefore no longer
+#   separates ice from snow; it overlaps between all classes except the extremes.
+# * Compliance (mjlab `terrain_compliance`): the robot physically sinks into soft ground. MuJoCo soft-contact
+#   parameters calibrated with scripts/mjlab/calibrate_compliance.py on the 16-link snake (~2.5 N per link):
+#     dmin 0.9, width 1 mm  -> 0.05 mm at rest     (ice, concrete)
+#     dmin 0.5, width 5 mm  -> 0.8 mm              dmin 0.3, width 15 mm -> 2.5 mm   (packed snow)
+#     dmin 0.15, width 30 mm -> 6.5 mm             timeconst 0.04, dmin 0.05, width 30 mm -> 11.6 mm (fresh snow)
+#   Targets from the literature: packed snow 0.5-2 mm, fresh snow 3-15 mm, ice and concrete ~0. Sinkage while
+#   moving is 70-90 % of the resting value. The damping ratio sets how bouncy impacts are (hard ground < 1).
+# * Texture: a pressure-modulating random field sampled through the skin (collect with
+#   contact.texture_filter = 0.0035 m), so only cm-scale roughness is felt; sub-5 mm texture (concrete aggregate) is
+#   filtered out, as a real 2 mm skin with 1 cm taxels would.
+# * No virtual sinkage: `sinkage` is 0 for every class (the taxel footprint widens only through real penetration).
+# * Not enacted in MuJoCo: restitution (Isaac only), anisotropy, undulation (the ground is a plane).
+# Provisional values; refine with docs/references/terrain_physics_v2.md.
+texture_modes: 8
+classes:
+  glare_ice:          # clear, smooth ice; near-melting to cold
+    friction: [0.04, 0.50]
+    contact_timeconst: [0.015, 0.02]
+    contact_dampratio: [0.5, 1.0]
+    contact_dmin: [0.9, 0.95]
+    contact_width: [0.0005, 0.001]
+    texture_amp: [0.0, 0.05]
+    texture_wavelength: [0.010, 0.030]
+    restitution: [0.1, 0.3]
+  rough_ice:          # refrozen / frosted ice: thin compliant frost layer, cm-scale bumps
+    friction: [0.10, 0.60]
+    contact_timeconst: [0.015, 0.02]
+    contact_dampratio: [0.6, 1.0]
+    contact_dmin: [0.7, 0.9]
+    contact_width: [0.001, 0.002]
+    texture_amp: [0.20, 0.50]
+    texture_wavelength: [0.008, 0.020]
+    restitution: [0.1, 0.3]
+  packed_snow:
+    friction: [0.20, 0.45]
+    contact_timeconst: [0.02, 0.03]
+    contact_dampratio: [1.0, 1.5]
+    contact_dmin: [0.3, 0.5]
+    contact_width: [0.005, 0.015]
+    texture_amp: [0.10, 0.30]
+    texture_wavelength: [0.010, 0.030]
+    restitution: [0.0, 0.1]
+  fresh_snow:
+    friction: [0.15, 0.45]
+    contact_timeconst: [0.02, 0.05]
+    contact_dampratio: [1.0, 2.0]
+    contact_dmin: [0.05, 0.20]
+    contact_width: [0.015, 0.030]
+    texture_amp: [0.10, 0.40]
+    texture_wavelength: [0.010, 0.040]
+    restitution: [0.0, 0.05]
+  concrete:           # non-ice control surface: stiff, grippy, fine texture the skin filters out
+    friction: [0.50, 1.00]
+    contact_timeconst: [0.01, 0.02]
+    contact_dampratio: [0.7, 1.0]
+    contact_dmin: [0.9, 0.95]
+    contact_width: [0.0005, 0.001]
+    texture_amp: [0.10, 0.30]
+    texture_wavelength: [0.002, 0.006]
+    restitution: [0.1, 0.2]

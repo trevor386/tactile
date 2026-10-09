@@ -1,0 +1,34 @@
+# Large simulation-v1 dataset for learning curves: same as collect_mjlab.yaml, 2400 episodes (480 per class), so the
+# 70/15/15 split leaves 360-episode validation and test sets and room for small training fractions.
+#   python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab_large.yaml
+robot: configs/robots/snake_3d.yaml
+terrains: configs/terrains/ice_snow_v1.yaml
+out: datasets/mjlab_v1_2400
+seed: 1
+num_envs: 400
+rounds: 6
+steps_per_episode: 150
+warmup_steps: 50
+rates:
+  physics_hz: 1000
+  control_hz: 100
+  latent_hz: 50
+  sensors: {tactile: 500, joint: 250, imu: 250}
+gait:
+  kind: sidewinding
+  yaw_amplitude: [0.5, 0.9]
+  pitch_amplitude: [0.15, 0.3]
+  frequency: [0.4, 1.0]
+contact:
+  mode: hybrid
+  texture_filter: 0.0035
+mjlab:
+  env_spacing: 4.0
+  actuator: dc_motor
+  stiffness: 20.0
+  damping: 0.5
+  effort_limit: 6.0
+  saturation_effort: 12.0
+  velocity_limit: 8.0
+  terrain_compliance: true
+  friction_solref: [0.02, 1.0]

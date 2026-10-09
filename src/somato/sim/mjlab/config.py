@@ -35,7 +35,15 @@ class MjlabSnakeConfig:
     njmax: int = 256
     # Soft-contact parameters of the robot geoms (time constant [s], damping ratio). Robot geoms get priority 1,
     # so their friction and solref override the ground's (MuJoCo otherwise takes the max of the two frictions).
+    # With `terrain_compliance` this is only the fallback for terrain classes without `contact_timeconst`.
     contact_solref: tuple[float, float] = (0.02, 1.0)
+    # Terrain compliance: robot-ground contacts become explicit contact pairs (one per robot geom) whose *normal*
+    # softness is set per env from the sampled terrain (`contact_timeconst`, `contact_dampratio`), so soft snow is
+    # physically penetrated, while the *friction* rows keep the stiff `friction_solref`. With plain geom contacts
+    # MuJoCo applies one solref to both, and a soft contact then also softens friction (links creep, locomotion
+    # stops depending on friction; see docs/mjlab.md). False: geom-geom contacts with `contact_solref` (v0).
+    terrain_compliance: bool = True
+    friction_solref: tuple[float, float] = (0.02, 1.0)
     # Contact detection margin / gap of the robot geoms [m] (MuJoCo: contacts are detected below `margin` and active
     # below `margin - gap`). With margin 0, lightly loaded links hover at ~0 penetration and the contact set flickers.
     contact_margin: float = 0.0
