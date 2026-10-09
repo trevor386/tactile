@@ -156,8 +156,10 @@ class TransformerBaseline(nn.Module):
     Each token embeds one sensor's raw samples over ``patch_steps`` latent steps (a linear map per sensor group, the
     only weight sharing), plus a Fourier encoding of the sensor's position and normal in the robot frame at the end
     of the patch (kinematics), a group embedding, a time-patch embedding and optionally a sensor-ID embedding. A
-    class token reads out one prediction per window, ``[B, 1, out]``. Dead sensors (``node_mask``) are masked out of
-    the attention. Window-level only (streaming via ``OnlineEncoder(window=...)``).
+    class token reads out one prediction per window, ``[B, 1, out]``. Dead sensors (``node_mask``) read their mean
+    (0 after normalization), as in the flat baseline; masking them out of the attention instead would need a dense
+    ``[B, heads, T*N, T*N]`` mask and rule out flash attention. Window-level only (streaming via
+    ``OnlineEncoder(window=...)``).
     """
 
     def __init__(self, groups: dict[str, GroupSpec], info: LayoutInfo, cfg: TransformerBaselineConfig):
@@ -194,20 +196,20 @@ class TransformerBaseline(nn.Module):
         B, L = batch.pos.shape[:2]
         T = math.ceil(L / P)
         pad = T * P - L
-        tokens, masks = [], []
+        tokens = []
         for gi, g in enumerate(batch.info.group_names):
             x = self.normalizers[g](batch.readings[g])  # [B, L, S, N, C]
+            sl = batch.info.slices[g]
+            if batch.node_mask is not None:  # dead sensors read their mean (0 after normalization)
+                x = x * batch.node_mask[:, None, None, sl, None].to(x.dtype)
             if pad:  # repeat the first step so every patch is full
                 x = torch.cat([x[:, :1].expand(B, pad, *x.shape[2:]), x], 1)
             _, _, S, N, C = x.shape
             x = x.view(B, T, P, S, N, C).permute(0, 1, 4, 2, 3, 5).reshape(B, T, N, P * S * C)
             tok = self.patch[g](x) + self.group_embed.weight[gi]
-            sl = batch.info.slices[g]
             if self.sensor_embed is not None:
                 tok = tok + self.sensor_embed.weight[sl]
             tokens.append(tok)
-            m = torch.ones(B, N, dtype=torch.bool, device=x.device) if batch.node_mask is None else batch.node_mask[:, sl]
-            masks.append(m[:, None].expand(B, T, N))
         tok = torch.cat(tokens, 2)  # [B, T, N, D]
         # Kinematics at the last latent step of each patch, in the robot frame.
         last = torch.arange(P - 1 - pad, L, P, device=tok.device).clamp_min(0)
@@ -216,8 +218,7 @@ class TransformerBaseline(nn.Module):
         tok = tok + self.time_embed.weight[:T, None]
         N = tok.shape[2]
         seq = torch.cat([self.cls.expand(B, 1, -1).to(tok.dtype), tok.reshape(B, T * N, -1)], 1)
-        keep = torch.cat([torch.ones(B, 1, dtype=torch.bool, device=seq.device), torch.cat(masks, 2).reshape(B, -1)], 1)
-        out = self.encoder(seq, src_key_padding_mask=~keep)[:, :1]  # class token, [B, 1, D]
+        out = self.encoder(seq)[:, :1]  # class token, [B, 1, D]
         outputs = {n: head(out) for n, head in self.heads.items()}
         if return_features:
             outputs["features"] = out

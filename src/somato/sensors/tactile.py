@@ -119,7 +119,7 @@ class FSRTactile(SensorModel):
         a_load = self.dt / (self.tau_load + self.dt)
         a_creep = self.dt / (self.creep_tau + self.dt)
         load, creep, gain = state["load"], state["creep"], state["gain"]
-        a_unload = state.get("a_unload", self.dt / (self.tau_unload + self.dt))
+        a_unload = state["a_unload"] if "a_unload" in state else self.dt / (self.tau_unload + self.dt)
         # Only the load/creep recursion is sequential (few kernels per sample); the elementwise conductance
         # transfer then runs on the whole window at once.
         eff = torch.empty_like(force)
