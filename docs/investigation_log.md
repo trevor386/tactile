@@ -40,7 +40,8 @@ Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dro
     `systemctl --user set-property --runtime <run-*.scope> MemoryMax=24G`.
   * Datasets load through the memory-mapped cache (`cache_v1/`), so several processes may share one dataset. Still
     run only one GPU training job at a time (8 GB card; somato_v1 peaks at 4.8 GB).
-* **Git:** commit after every change and push when possible. Pushing currently fails (Q-4).
+* **Git:** commit after every change and push (`git push origin claude/hierarchical-tactile-architecture-vwlzjv`).
+  The identity is trevor386 <trevorjohst@proton.me>.
 
 ## 1. Ongoing experiments
 
@@ -174,7 +175,7 @@ Avoid very long runs until the earlier steps are sound.
 | Q-1 | Should the primary task stay 5-class terrain classification, or move to physical property estimation (friction, compliance/sinkage, roughness), which transfers to unknown worlds (H-11)? | Keep classification as primary for E-1/E-2; add property estimation (E-5). |
 | Q-2 | Europa-like OOD set: compliant silicone skin, or glassy skin (silicone is glassy at ~100 K, which changes contact stiffness by orders of magnitude)? | Model both as two OOD sets. |
 | Q-3 | With literature friction ranges (glare ice 0.05–1.0 across temperature), glare ice and dry concrete are nearly indistinguishable by touch (same skin-dominated stiffness, invisible fine texture). That is physically honest, but it caps the classification ceiling. Keep it? | Keep; T-6 quantifies the ceiling. |
-| Q-4 | `git push` to github.com/trevor386/tactile fails with 403: this machine's gh/git login is user `schannap` (git identity "Suchitha", which also authors the commits). Grant that account write access, or run `gh auth login` as trevor386 (and set `git config user.name/email` if commits should carry your identity)? | Keep committing locally; push as soon as it works. |
+| Q-4 | Pushing failed (403): the machine was logged in as another person's GitHub account, which also authored the local commits. | resolved 2026-10-08: the user logged in as trevor386; the 42 local commits by the other identity were re-authored to trevor386 <trevorjohst@proton.me> (contents and dates unchanged) before the first push (`ce8835d..97ee0bf`, fast-forward). |
 
 ## 6. Decisions
 
