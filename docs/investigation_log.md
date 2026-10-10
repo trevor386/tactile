@@ -9,9 +9,9 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-10 12:00)
+## RESUME HERE (state as of 2026-10-10 12:10)
 
-* **Running in jobq, in order** (~19 h from 11:50): `e5_properties` (E-5, `runs/v1/properties`) → `e5_ood`
+* **Running in jobq, in order** (~19 h from 12:06): `e5_properties` (E-5, `runs/v1/properties`) → `e5_ood`
   (T-21 on its checkpoints, `runs/v1/ood_e5.csv`) → `e21_sensor_random` (E-21, `runs/v1/sensor_random`) →
   `e21_robustness` (`runs/v1/robustness_e21.csv`) → `e13b_slide` (`runs/v1/e13b_slide`) → `e1b_budget`
   (`runs/v1/e1b_budget`). Analyse each as it finishes and write its finding (F-25 onwards).
@@ -52,7 +52,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 %, 3 seeds, checkpoint by lowest validation property error; then their property estimates on the OOD set (`ood_eval.py`, T-21) | `configs/experiments/v1_properties.yaml` | ~5.5 h | **running** (jobq `e5_properties`, from 11:50) |
+| 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 %, 3 seeds, checkpoint by lowest validation property error; then their property estimates on the OOD set (`ood_eval.py`, T-21). Reference points on the test split: friction MAE 0.209 (global mean) / 0.135 (perfect class + class mean); sinkage MAE 1.82 / 0.55 mm (test sinkage: ice and concrete 0.05–0.10, packed snow 0.47 ± 0.32, fresh snow 5.6 ± 2.9 mm) | `configs/experiments/v1_properties.yaml` | ~5.5 h | **running** (jobq `e5_properties`, restarted 12:06 after the sinkage-label fix) |
 | 2 | E-21 | Sensor-model randomization (H-2a, H-3) | The E-2 models trained with a FSR whose parameters are drawn per window (hysteresis 0–20 %, unloading 10–150 ms, gain spread 0.05–0.25, creep 0–10 %, noise 0.001–0.005), 10 % / 100 %, 3 seeds; then the E-6 suite on the fixed fsr_v1. "no_hysteresis" lies inside the ranges (interpolation), the other E-6 perturbations partly beyond (extrapolation). Does stage 1 stop overfitting the simulated hysteresis (F-23), what does it cost on the nominal sensor, is the lead kept? | `configs/experiments/v1_e21_sensor_random.yaml`, `configs/sensors/fsr_v1_random.yaml` | ~5.5 h + 0.5 h | queued in jobq after E-5 (`e21_sensor_random`, `e21_robustness`) |
 | 3 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | `configs/experiments/v1_e13b_slide.yaml` | ~3 h | queued in jobq (`e13b_slide`) |
 | 4 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | queued in jobq (`e1b_budget`) |
@@ -135,3 +135,6 @@ Done tasks are in the commits and in `docs/findings.md`:
 | 2026-10-08 | Tasks: classification and property estimation are both proxies (stage 3 will eventually feed a locomotion controller); Europa is motivation only; touch-indistinguishable classes stay (no thermal sensors). | User answers, 2026-10-08. |
 | 2026-10-09 | Main studies use the static pool head as stage 3; the brain head is research (T-19). | It stalls or memorizes on moving stimuli and ties on terrain (F-17 to F-20). |
 | 2026-10-10 | GPU work runs through `tools/jobq.py` (sequential, memory-capped, file-based waiting). | Ad-hoc queue scripts with `pgrep -f` waits deadlocked or killed themselves (2026-10-09/10). |
+| 2026-10-10 | The measured-sinkage target is the penetration of each link capsule's lowest point (`data/derived.py`), regressed as log(sinkage + 0.1 mm); E-5 restarted with it. | The frame-origin depth read link tilt as sinkage: 0.8 ± 0.5 mm on rigid ground vs 0.05 mm true (packed snow 0.47, fresh snow 6.4 mm), so it was mostly pose noise outside fresh snow. No finding had used it. |
+| 2026-10-10 | E-5 keeps the checkpoint with the lowest validation property error (`select_metric: -props/zmae`). | E-5 is about property estimates; terrain accuracy is reported at that checkpoint. |
+| 2026-10-10 | E-21's randomization ranges contain the nominal sensor and "no hysteresis" but stop short of most E-6 perturbations. | Tests both interpolation (the F-23 failure) and extrapolation beyond the trained range. |
