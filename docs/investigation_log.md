@@ -1,207 +1,134 @@
 # Investigation log (version 1)
 
-The working plan of the project: what is running, what we believe and want to test, what comes next, and what has
-to be built. **Keep it current**: update the status of every item when it changes, add new items as they come up, and
-record every experiment's outcome in `docs/findings.md` (why it was run, what was found, the supporting evidence and the
-caveats). Design: `docs/architecture.md`. Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature:
-`docs/references/`. Version-0 experiments and their caveats: `docs/archive/`.
+The working plan: what is running, what we believe and want to test, what comes next, and what has to be built.
+**Keep it current**: update statuses when they change, add items as they come up, and record every experiment's outcome
+in `docs/findings.md` (why it was run, result, evidence, caveats, implication). Design: `docs/architecture.md`.
+Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`. Version 0 and its caveats:
+`docs/archive/`. How to run things on this machine: `CLAUDE.md` and `tools/README.md`.
 
-Item IDs are stable: H = hypothesis, E = experiment, T = task (code or setup), Q = question for the user, D = decision.
-Status words: *running*, *next*, *queued*, *blocked (by X)*, *done (date)*, *dropped (why)*.
+IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
+*blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-09 ~05:40)
+## RESUME HERE (state as of 2026-10-10 11:40)
 
-* **Running, unattended:** E-2, the main learning curves (`configs/experiments/v1_main_curves.yaml` →
-  `runs/v1/main_curves/`, log `runs/logs/v1_main_curves.log`), from 15:08, ~12 h (to ~03:00 on 2026-10-10). E-1c is
-  done (F-21).
-* **When it lands:**
-  1. Accuracy mean ± std over the 3 seeds per model and fraction (`results.csv`, `summary.md`, curves PNG).
-  2. Episodes needed by each baseline to reach somato_pool's accuracy (H-1).
-  3. Gap vs data (H-4), receptor_only vs somato_pool (H-14), per-class recall.
-  4. Queue v1f then runs automatically (`runs/logs/queue_v1f.sh`, log `runs/logs/queue_v1f.log`): collect the OOD
-     Earth set, E-6 robustness (`runs/v1/robustness_e6.csv`, log `runs/logs/e6_robustness.log`), E-7 OOD
-     (`scripts/analysis/ood_eval.py` → `runs/v1/ood_e7.csv`, log `runs/logs/e7_ood.log`). Both evaluation scripts are
-     untested on v1 checkpoints: check their logs for errors first.
-* **Then:**
-  1. E-1c (lr sweep with the chosen stage 3).
-  2. E-2 (main curves, 3 seeds).
-  3. E-5, E-6, E-7.
-* **Status commands:**
-  ```bash
-  tail -3 runs/logs/collect_mjlab_v1_2400.log
-  pgrep -af "data_efficiency|collect_mjlab|train.py"
-  cat runs/v1/signs_of_life/summary.md
-  nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv
-  free -g
-  ```
-* **Environment:**
-  * `source ~/miniconda3/etc/profile.d/conda.sh; conda activate mjlab; unset PYTHONPATH`.
-  * Strip `/opt/ros` from `LD_LIBRARY_PATH` (ROS Jazzy is sourced in `~/.bashrc`).
-  * Run every Python process that loads a dataset or uses the GPU under a memory cap, so a mistake cannot freeze the
-    machine again: `systemd-run --user --scope -q -p MemoryMax=24G python ...` for training on the 2,400-episode set,
-    8–12G for analysis.
-  * Caps should not throttle: mapped dataset pages count against the cap, and the training set touches ~13.5 GB. A
-    running job's cap can be raised in place with
-    `systemctl --user set-property --runtime <run-*.scope> MemoryMax=24G`.
-  * Datasets load through the memory-mapped cache (`cache_v1/`), so several processes may share one dataset. Still
-    run only one GPU training job at a time (8 GB card; somato_v1 peaks at 4.8 GB).
-* **Git:** commit after every change and push (`git push origin claude/hierarchical-tactile-architecture-vwlzjv`).
-  The identity is trevor386 <trevorjohst@proton.me>.
+* **Running:** the last pre-`jobq` queue, `runs/logs/queue_v1f.sh` (log `runs/logs/queue_v1f.log`):
+  * the OOD Earth set is collected (`datasets/mjlab_v1_ood_earth_600`);
+  * E-6 robustness is running → `runs/v1/robustness_e6.csv`, log `runs/logs/e6_robustness.log`;
+  * E-7 OOD evaluation follows → `runs/v1/ood_e7.csv`, log `runs/logs/e7_ood.log`.
 
-## 1. Ongoing experiments
+  Check with `cat runs/logs/queue_v1f.log`. Analyse both and write F-23 and F-24 if not done yet.
+* **From now on run GPU work through `tools/jobq.py`** (`add` / `start` / `status` / `wait`; see `tools/README.md`).
+  The worker is already started.
+* **Next:** item 1 of the queue below (E-5), then E-13b and E-1b.
 
-| ID | what | started | config / output | status |
-|---|---|---|---|---|
-| queue v1a | E-13, then E-3+E-4 | 2026-10-08 23:10 | `runs/logs/queue_v1a.sh` | done 2026-10-09 05:29 (F-17, F-18) |
-| queue v1c | after v1a: `validate_mjlab` re-run (review fix), then E-19 brain diagnostics on the proxy and on terrain at 10 % (~2.5 h) | 2026-10-09 01:55 (waiting) | `runs/logs/queue_v1c.sh`, log `runs/logs/queue_v1c.log`; outputs `runs/v1/e19_brain_proxy/`, `runs/v1/e19_brain_terrain/` | waiting for v1a. (Queue v1b, E-1c, was cancelled before it started: the lr sweep waits for the stage-3 decision.) |
+## 1. Hypotheses and conjectures
 
-## 2. Hypotheses and conjectures
+Central hypothesis (user, 2026-10-08): an intentionally structured hierarchy inspired by the somatosensory system is
+(H-1) more data-efficient than unstructured models and (H-2) generalizes better. Context: short term, arctic monitoring
+and robots on icy terrain in high-latitude cities; long term (motivation only), icy worlds like Europa with no training
+data. The structure is a starting point, changed only on evidence.
 
-The central hypothesis (user, 2026-10-08): an intentionally structured hierarchy inspired by the somatosensory system
-is (H-1) more data-efficient than unstructured models and (H-2) generalizes better. The deployment context:
-* short term, arctic monitoring and robots crossing icy terrain in high-latitude cities;
-* long term, icy worlds such as Europa, where there will be no training data.
-
-Generalization is therefore the goal, and data efficiency is the first test. The exact structure is a starting
-point, to be changed only on evidence.
-
-| ID | hypothesis / conjecture | prediction (what would support it) | tested by | status |
-|---|---|---|---|---|
-| H-1 | The somato hierarchy is more data-efficient than the flat GRU and the transformer, at equal parameters and with the same inputs including kinematics. | Higher test accuracy at small training sets; the baselines need ≥ 2× the episodes for the same accuracy. | E-1, E-2 | open (v0 supportive but confounded, see findings F0-9/F0-10) |
-| H-2 | The somato hierarchy generalizes better under distribution shift. | A smaller accuracy drop than the baselines under (a) sensor non-idealities unseen in training, (b) terrain parameters outside the training range (cold ice, Europa-like, sand, gravel), (c) another simulator, (d) layout changes (dead taxels, other robots). | E-6 to E-10 | open |
-| H-3 | A simple simulator lets unstructured models exploit simulator shortcuts: they look good in sim and fall off in the real world. | Any baseline advantage shrinks as the simulation becomes more realistic (v1 vs v0) and reverses under shift; baselines rely on cues a real skin cannot see. | E-1/E-2 vs archived v0, E-6 to E-9, cue-reliance probes | open |
-| H-4 | Structure trades expressiveness for efficiency: its advantage shrinks with data and may cross over. | The curves converge or cross at large data. | E-2, E-11 | open (v0: no crossover at 1,680 episodes with enough steps, F0-10) |
-| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous, and how much it matters depends on the sensor physics. | no_spatial loses most on FSR (normal-only) and least with shear-sensing taxels. | E-3, E-12 | **task-dependent so far**: marginal on terrain (≤ 2 points, F-18), decisive for moving stimuli (0.98 vs 0.45, F-17). One seed. |
-| H-6 | The continuous 3D kernel (weights a function of relative position only) is more data-efficient than feature-dependent graph message passing. | somato_v1 ≥ somato_v1_graph at small data. | E-4 | weakly supported (F-18: equal at 10 %, kernel +5 at full data; one seed) |
-| H-7 | Keeping modalities segregated until stage 3 is at least as data-efficient as mixing them in stage 2, and generalizes better: each receptor type keeps its own code, as in the nervous system. | somato_v1 ≥ somato_v1_mixed, especially under shift. | E-3, E-6 | no difference in-distribution (F-18); the generalization part is still open (E-6) |
-| H-14 | (new, from F-18) The main benefit over unstructured models on terrain comes from stage 1: a receptor encoder shared by all sensors of a modality plus permutation-invariant pooling. | A receptor-only model (no_spatial + pool) matches the full model on terrain and beats the baselines by the same margin. | E-2 (include no_spatial / receptor-only) | suggested by F-18 |
-| H-8 | A dynamic stage 3 (attention at the current body geometry, memory over time) beats static pooling, because a fixed attention pattern does not fit a moving body. | somato_v1 > somato_v1_pool, especially on tasks needing body-wide or temporal integration. | E-3, E-13, E-19 | **contradicted so far for the current implementation** (F-17: brain stalls and memorizes; pool 0.98 vs brain 0.25 on the proxy). Diagnosing (E-19); the idea is not refuted, the implementation trains badly. |
-| H-9 | Stage 2 acting on stage-1 latents, which encode each taxel's recent history, can detect stimuli moving across the skin (e.g. a force sliding along the body in a direction) without an explicit spatio-temporal kernel. | High accuracy on a slide-direction proxy task; it drops without stage 2. | E-13 | **supported** (F-17: 0.98 with stage 2 + pool from 84 episodes, 0.45 without stage 2, baselines 0.2–0.54; one seed) |
-| H-10 | Self-supervised objectives (masked sensor prediction, reconstruction, cross-modal prediction) improve data efficiency, more for the structured model, whose stages have natural local objectives. Training stages on their own, with only the last stage task-specific, may generalize better than end-to-end training. | Pretrained + fine-tuned > supervised-only at small data; layer-wise ≥ end-to-end under shift. | E-14, E-15 | open |
-| H-11 | Physical property estimation (friction, compliance/sinkage, roughness) is a better target than Earth class labels for generalization to unknown worlds, and structure helps it too. | Properties transfer to OOD terrains where class labels do not exist; the structured model estimates them better. | E-5, E-7 | open |
-| H-12 | The protocol-v4 budget, max(3,000 steps, 15 epochs), trains every model adequately at every data fraction. | Doubling the budget changes test accuracy by < 1 point. | E-1b | open (v0: 3,000 steps was not enough at full data, F0-11) |
-| H-13 | Whether the tactile information learned for ice and snow is also useful on granular, shifting and uneven terrain. | Reasonable transfer or few-shot adaptation to sand, gravel and uneven heightfield terrain. | E-7, E-16 | open |
-
-## 3. Experiment queue (ordered)
-
-Order rule (user, 2026-10-08):
-1. Correctness and signs of life first.
-2. Then initial comparisons against the baselines.
-3. Then generalization, which is harder; sim-to-sim is a proxy for it.
-
-Avoid very long runs until the earlier steps are sound.
-
-| # | ID | experiment | purpose / design | config | cost | depends on | status |
-|---|---|---|---|---|---|---|---|
-| 1 | E-1 | **Signs of life** | Does everything train on simulation v1? First comparison (H-1). somato_v1, flat_gru and transformer at 10 % and 100 % of the training episodes, seed 0, widths matched (~636k), protocol v4. | `configs/experiments/v1_signs_of_life.yaml` | ~2 h | T-1, T-6 | done 2026-10-08 (F-14, F-16; FSR bug caveat) |
-| 2 | E-19 | **Brain-head diagnostics** (H-8, F-17) | Stage 3 variants on identical stages 1–2 (dim 64): pool, brain, brain without GRU, without attention, with a direct node-pool path, smaller; slide proxy and terrain at 10 %. Decide the stage-3 design. | `configs/experiments/e19_brain_diagnostics.yaml` | ~2.5 h | — | done 2026-10-09 (F-19: the GRU causes the stall) |
-| 2a | E-19b | Residual brain memory | Brain with `residual_memory` (± node-pool path) on the proxy and terrain at 10 %. | `configs/experiments/e19b_brain_residual.yaml` | ~45 min | E-19 | done 2026-10-09 (F-20: not fixed; main studies use the pool head) |
-| 2b | E-1c | **Baseline fairness / tuning** | somato_pool, receptor_only, flat_gru and transformer at 10 % and 100 %, fixed FSR model, lr 1e-3 / 3e-4 / 3e-3; the best lr per model goes into E-2. | `configs/experiments/v1_e1c.yaml` via queue v1e | ~6 h | E-19b | done 2026-10-09 (F-21) |
-| 3 | E-1b | Budget adequacy (H-12) | somato_v1 and transformer at 25 % and 100 % with twice the v4 budget. Partly answered by E-1: flat peaks early, the transformer is still improving at the end. | to write | ~2 h | E-1c | queued |
-| 3 | E-3 | Structure ablations within the family (H-5, H-7, H-8) | somato_v1 vs `_no_spatial`, `_mixed`, `_pool` at 10 % and 100 %, seed 0 (then seeds). | `v1_structure_ablations.yaml` | ~5 h | E-1 | done 2026-10-09 (F-18) |
-| 4 | E-4 | 3D kernel vs graph (H-6) | somato_v1 vs somato_v1_graph, same fractions. | same study | — | E-1 | done 2026-10-09 (F-18) |
-| 5 | E-2 | **Main learning curves** (H-1, H-4, H-14) | Fractions 0.025, 0.1, 0.25 and 1.0; seeds 0–2; somato_pool, receptor_only, flat_gru, transformer at the E-1c learning rates (flat_gru_raw dropped for time; add if flat looks feature-limited). | `configs/experiments/v1_main_curves.yaml` | ~12 h | E-1c | running (from 15:08) |
-| 6 | E-5 | Property estimation (H-11) | Regress friction, measured sinkage and roughness (plus classification) for the main models. | `configs/experiments/v1_properties.yaml` | ~3 h | T-7 | queued (ready to run) |
-| 7 | E-6 | Sensor robustness (H-2a, H-3) | Evaluate E-2 checkpoints under single-factor perturbations of the FSR v1 model (slower or faster unloading, more hysteresis, gain spread, noise, dead taxels). | T-8 suite | < 1 h | E-2, T-8 | queued |
-| 8 | E-8 | Sim-to-sim (H-2c) | Train on mjlab, test on Isaac (and the reverse) on paired episodes. | to write | ~3 h | T-10 | queued |
-| 9 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction and compliance ranges, test on the rest (extrapolation). | to write | ~3 h | E-1 | queued |
-| 10 | E-7 | OOD terrains (H-2b, H-11, H-13) | Cold arctic ice, dry sand, gravel (Earth set; Europa deprioritized, Q-2). Evaluate property estimates and class posteriors (open-set). | `collect_mjlab_ood_earth.yaml` | ~2 h | T-9, E-5 | queued |
-| 11 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns at test time; a robot with different link count or taxel density (structured models only, since the baselines are tied to one layout; report this as a qualitative advantage). | to write | < 1 h | E-2 | queued |
-| 12 | E-13 | Slide-direction proxy (H-9, H-8) | A force sliding along or around the body; classify the direction (4-way). somato_v1, no_spatial, pool, flat_gru, transformer at 10 % and 100 % of 840 training episodes. | `configs/experiments/proxy_slide.yaml` | ~2 h | T-12 | done 2026-10-09 (F-17: H-9 supported; the brain head stalls) |
-| 13 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal prediction pretraining, then fine-tune at small data. | to write | ~6 h | T-11 | queued |
-| 14 | E-15 | Layer-wise vs end-to-end (H-10) | Stages trained on their own objectives, frozen, only stage 3 task-specific; vs end-to-end. | to write | ~4 h | T-11 | queued |
-| 15 | E-12 | Sensor technology (H-5) | Ideal + shear, capacitive v1 vs FSR v1 for somato_v1 vs no_spatial vs baselines. | to write | ~3 h | E-1 | queued |
-| 16 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum. | to write | ~10 h | E-2 | queued |
-| 17 | E-16 | Uneven / granular proxy environments (H-13) | Heightfield terrain, sand-like compliance. | to write | — | T-13 | queued |
-| 18 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review (T-15). | — | — | E-2, T-15 | queued |
-| 19 | E-18 | Long-horizon streaming | The version-0 accuracy decay with time since reset; TBPTT vs sliding window for the v1 models. | — | ~2 h | E-1, T-17 | queued |
-
-## 4. Tasks (code and setup)
-
-**Ongoing**
-
-| ID | task | status |
+| ID | hypothesis / conjecture | status |
 |---|---|---|
-| T-1 | Collect `datasets/mjlab_v1_2400` with the revised catalog v1 and build its cache (16 GB). | done 2026-10-08 (validation 15/15, F-12) |
-| T-2 | Write `docs/architecture.md` for version 1. Include: stage mapping receptor / spinal cord / brain; why stage 2 uses the current poses every step (that is how a 3D kernel follows a moving body); the kernel3d vs graph distinction; segregation; brain; baselines. | next |
-| T-3 | Update `docs/mjlab.md` (compliant contact pairs, calibration), `README.md` (v1 configs and quickstart), `docs/isaac_sim.md` (driver 580 since 2026-10-08). | next |
-| T-4 | Update the persistent memory notes (driver change, memory-cap rule, log structure). | done 2026-10-08 |
-| T-5 | Independent code review of the v1 changes (sim pairs, segregation, brain, stride/streaming, baselines, FSR v1, cache). | done 2026-10-08 (F-15): 1 result-affecting bug (FSR hysteresis offset; E-1 affected) and 6 latent ones, all fixed with tests. Re-run `validate_mjlab.py` after E-1 frees the GPU (the solimp dmax write; no v1 class changes). |
-| T-6 | `scripts/analysis/task_ceiling.py` for catalog v1: Bayes ceilings from the sampled parameters (friction only, + compliance, + roughness), to interpret E-1. | done 2026-10-08 (F-13) |
+| H-1 | The structured hierarchy is more data-efficient than the flat GRU and the transformer (equal parameters, same inputs incl. kinematics). | **supported in sim v1** (F-22: 2–3× fewer episodes, gaps ≥ 2 seed std at all sizes) |
+| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | open: E-6 (a), E-7 / E-9 (b), E-8 (c), E-10 (d) |
+| H-3 | A simple simulator lets unstructured models exploit sim shortcuts that fail in reality. | open: E-6, E-8, E-9; v1 removed the synthetic sinkage shortcut |
+| H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
+| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17). E-12 for sensor physics. |
+| H-6 | The continuous 3D kernel beats feature-dependent graph message passing. | weakly supported (F-18, one seed) |
+| H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
+| H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
+| H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | supported (F-17, one seed; E-13b to confirm) |
+| H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
+| H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | open (E-5, E-7) |
+| H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | open: in E-2 most full-data best steps were late (F-22) (E-1b) |
+| H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
+| H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
 
-**Planned**
+## 2. Experiment queue (ordered)
+
+Order (user, 2026-10-08): signs of life → comparisons with baselines → generalization (sim-to-sim as a proxy). Avoid
+very long runs until earlier steps are sound.
+
+| # | ID | experiment | design | config | cost | status |
+|---|---|---|---|---|---|---|
+| — | E-6 | Sensor robustness (H-2a, H-3) | E-2 checkpoints (10 %, 100 %, 3 seeds) under single-factor FSR v1 perturbations and dead taxels | `configs/sensors/robustness_fsr_v1.yaml` | < 1 h | running (queue v1f) |
+| — | E-7 | OOD terrains (H-2b, H-13) | E-2 full-data checkpoints on cold arctic ice, dry sand, gravel: predicted-class histograms, confidence vs in-distribution, AUROC | `scripts/analysis/ood_eval.py` | < 1 h | queued (queue v1f) |
+| 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 % | `configs/experiments/v1_properties.yaml`: **update models to somato_pool / receptor_only / flat_gru / transformer with E-2 lrs first** | ~4 h | next |
+| 2 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | adapt `configs/experiments/proxy_slide.yaml` | ~3 h | queued |
+| 3 | E-1b | Budget adequacy (H-12) | somato_pool and transformer at 25 % and 100 % with twice the v4 budget | to write | ~3 h | queued |
+| 4 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction/compliance ranges, test on the rest | to write | ~3 h | queued |
+| 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
+| 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
+| 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
+| 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
+| 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
+| 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
+| 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
+| 12 | E-18 | Long-horizon streaming | Accuracy vs time since reset; TBPTT vs sliding window for the v1 models | — | ~2 h | blocked (T-17) |
+| 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
+
+**Done:**
+* E-1, signs of life (F-14, F-16).
+* E-3 / E-4, structure ablations (F-18).
+* E-13, slide proxy (F-17).
+* E-19 / E-19b, brain diagnostics (F-19, F-20).
+* E-1c, learning-rate sweep (F-21).
+* E-2, main curves (F-22).
+
+## 3. Tasks (code and setup)
 
 | ID | task | for | status |
 |---|---|---|---|
-| T-7 | Property-regression task: friction, measured sinkage (from body poses: capsule depth when in contact), roughness amplitude; normalized targets, Huber loss; multi-task with classification. | E-5 | done 2026-10-08 for friction + measured sinkage (`property_regression` task, `data/derived.py`, heads created automatically, stats saved in the checkpoint; study config `configs/experiments/v1_properties.yaml`). Felt roughness as a target still to add. |
-| T-8 | Robustness suite v1: perturbations relative to `fsr_v1.yaml`, plus dead-taxel patterns at test time (node mask in evaluation). | E-6 | done 2026-10-08 (`configs/sensors/robustness_fsr_v1.yaml`, `AugmentConfig.eval_sensor_dropout`) |
-| T-9 | OOD terrain catalogs: cold arctic ice, Europa-like (g = 1.315 m/s² needs a per-scene gravity change in mjlab; skin assumption Q-2), dry sand, gravel; open-set evaluation path for classes absent in training. | E-7 | partly done 2026-10-08: catalogs `ood_earth_v1.yaml`, `ood_europa_v1.yaml` (both skin variants), collection configs `collect_mjlab_ood_earth.yaml`, `collect_mjlab_europa.yaml`, mjlab `gravity` option. Still to do: collect them (GPU, ~2 min each) and an evaluation script for classes absent in training (property errors, posterior entropy, class histograms). |
-| T-10 | Isaac parity for sim-to-sim: PhysX compliant-contact stiffness and damping per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac still runs on driver 580. | E-8 | queued |
-| T-11 | SSL objectives: masked-sensor prediction (stage-1/2 targets), reconstruction, next-step prediction, cross-modal prediction (touch ↔ proprioception); trainer support for pretraining, freezing stages and a task-specific last stage only. | E-14, E-15 | queued |
-| T-12 | Slide-direction proxy: generate sliding contacts along the body (scripted forces in mjlab or a stimulus-level generator) with direction and speed labels. | E-13 | done 2026-10-08: stimulus-level generator `scripts/proxy/make_slide_dataset.py` (4 directions along/around the body, distractors, static proprioception; sanity-checked: the loaded taxel moves the right way per class); `datasets/proxy_slide_1200` generating; study config `configs/experiments/proxy_slide.yaml` |
-| T-13 | Uneven terrain: mjlab heightfields per env; the taxel contact model must query the terrain height under each taxel (it assumes a plane today). | E-16 | queued |
-| T-14 | Further realism, in order of expected impact: (a) snow plasticity (sinkage that does not recover) and ploughing/berm drag on laterally moving links; (b) static friction and stick-slip; (c) temperature effects on the sensor; (d) taxel crosstalk and load sharing through the skin. | H-3 | queued |
-| T-15 | Literature review of the somatosensory system (receptor types SA/RA, dorsal-column pathways, somatotopy, cortical integration) for architecture ideas; only after E-2 gives evidence. | E-17 | queued |
-| T-16 | Speed: data-loader prefetch (workers need per-worker reseeding of the crop jitter); optionally a fused FSR kernel. | throughput | loader done 2026-10-08: persistent workers with per-worker reseeding (tested reproducible and varying per epoch); 70 → 13 ms per batch on the CPU, hidden behind GPU compute; `num_workers: 4` in `terrain_v1.yaml` from E-1b on (E-1 used 0). Fused FSR kernel still optional. |
-| T-17 | TBPTT failure with 6 chunks per sequence (from v0): test 3 and 4 chunks and more distinct sequences per epoch. | E-18 | queued |
-| T-18 | Disk hygiene: delete v0 datasets, their caches and the 600_dc cache (4 GB) once no experiment needs them. | — | queued |
-| T-19 | Stage-3 research: a dynamic, geometry-aware, temporal stage 3 that trains reliably. The v1 brain stalls or memorizes on sparse moving stimuli (F-17, F-19, F-20). Ideas: initialize as the pool head (gated residual from pooled features, gate at 0); tokens from pooled features without LayerNorm; diagnose gradients at initialization; compare with Perceiver-style latents. Long term, stage 3 feeds a locomotion controller (Q-1). | H-8 | queued (after E-2) |
+| T-7b | Add felt roughness (texture amplitude × skin attenuation) as a property-regression target. | E-5 | queued |
+| T-10 | Isaac parity for sim-to-sim: PhysX compliant contact per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac runs on driver 580. | E-8 | queued |
+| T-11 | SSL objectives (masked sensor prediction, reconstruction, next-step, cross-modal touch ↔ proprioception); trainer support for pretraining, freezing stages, task-specific last stage only. | E-14, E-15 | queued |
+| T-13 | Uneven terrain: mjlab heightfields per env; the taxel contact model must query the terrain height under each taxel (it assumes a plane). | E-16 | queued |
+| T-14 | Realism, by expected impact: (a) snow plasticity and ploughing/berm drag; (b) static friction and stick-slip; (c) temperature effects on the sensor; (d) taxel crosstalk and load sharing through the skin. | H-3 | queued |
+| T-15 | Literature review of the somatosensory system (SA/RA receptors, dorsal-column pathways, somatotopy, cortical integration) for architecture ideas. | E-17 | queued |
+| T-17 | TBPTT failure with 6 chunks per sequence (from v0): test 3 and 4 chunks, more distinct sequences per epoch. | E-18 | queued |
+| T-18 | Disk hygiene: delete v0 datasets and caches, and `datasets/mjlab_terrain_600_dc/cache_v1` (4 GB), when no experiment needs them. | — | queued |
+| T-19 | Stage-3 research: a dynamic, geometry-aware, temporal stage 3 that trains reliably. The v1 brain stalls or memorizes on sparse moving stimuli (F-17, F-19, F-20). Ideas: initialize as the pool head (gated residual, gate at 0); tokens without LayerNorm; gradient diagnosis at initialization; Perceiver-style latents. Long term stage 3 feeds a locomotion controller. | H-8 | queued |
+| T-20 | Europa OOD set (catalog `ood_europa_v1.yaml`, config `collect_mjlab_europa.yaml`, gravity option): motivation only, not in the near-term queue (user, 2026-10-08). | — | parked |
 
-**Done this session (2026-10-08)**, details in `docs/findings.md` and the commits:
-* Archive of v0 docs and configs.
-* Memory-mapped dataset cache.
-* Simulation v1: compliant contact pairs, catalog v1, compliance validation check.
-* Model v1:
-  * segregated stage 2;
-  * kernel3d with a support radius;
-  * brain head with stride and exact streaming;
-  * baselines with kinematics and dropout masking;
-  * transformer baseline.
-* FSR v1 (per-taxel unloading time constant, rate-independent hysteresis).
-* Calibration, profiling and robustness scripts.
-* Distance and sensor-loop speed-ups.
-* Second literature review (`docs/references/terrain_physics_v2.md`).
+Done tasks are in the commits and in `docs/findings.md`:
+* v0 archive;
+* dataset cache (F-5);
+* simulation v1 (F-6 to F-12);
+* model v1 and baselines;
+* FSR v1;
+* code review (F-15);
+* property regression for friction and sinkage;
+* robustness suite;
+* OOD catalogs and scripts;
+* slide proxy;
+* loader prefetch;
+* job queue `tools/jobq.py` (2026-10-10).
 
-## 5. Other tracked items
+## 4. Other tracked items
 
-* **Disk** (117 GB free on 2026-10-08):
-  * `datasets/mjlab_v1_2400`: ~1.4 GB of episodes plus a ~16 GB cache.
-  * `datasets/mjlab_terrain_600_dc/cache_v1`: 4 GB, from testing the cache; delete if unused.
-  * v0 datasets: ~10 GB in total.
-  * v0 runs: `runs/v3*`, `runs/v2*`, `runs/isaac600*`.
-* **Memory rule.** An uncached dataset of 2,400 episodes costs 13.7 GB per process. Always load datasets through the
-  cache and cap every process. The freeze on 2026-10-08 came from four uncached copies.
-* **GPU / OS.** Kernel 7.0.0-38 with NVIDIA 580.178 since 2026-10-08 evening (was 595 on 7.0.0-28). An unattended
-  kernel update without the matching NVIDIA module broke the GPU once; after kernel updates check that
-  `linux-modules-nvidia-*-$(uname -r)` is installed. Isaac Sim is not yet re-tested on 580 (T-10).
-* **Parameter budget.** Models are width-matched to somato_v1 (~636k parameters). Compute is not matched: somato_v1 takes
-  270 ms per step, the transformer 168 ms, flat_gru 50 ms. The user accepts compute differences unless extreme.
-* **The baselines are tied to one sensor layout** (flat: fixed input vector; transformer: fixed group set, optional
-  sensor IDs). Layout transfer (E-10) can only be run for the structured models; report that as a capability.
+* **Disk** (95 GB free on 2026-10-10):
+  * `datasets/mjlab_v1_2400`: 1.4 GB plus a 16 GB cache;
+  * `proxy_slide_1200`: plus its cache;
+  * `mjlab_v1_ood_earth_600`;
+  * v0 datasets: ~10 GB;
+  * runs under `runs/v1/` (checkpoints in `main_curves`).
+* **Main-study models and learning rates** (E-2): somato_pool 1e-3, receptor_only 1e-3, transformer 1e-3, flat_gru 3e-4;
+  widths matched to somato_pool (~428k). Compute per step is not matched (the user accepts that).
+* **The baselines are tied to one sensor layout**: layout transfer (E-10) runs for the structured models only; report it
+  as a capability.
+* **Open questions for the user:** none.
 
-**Open questions for the user**
-
-| ID | question | default until answered |
-|---|---|---|
-| Q-1 | Should the primary task stay 5-class terrain classification, or move to physical property estimation (friction, compliance/sinkage, roughness), which transfers to unknown worlds (H-11)? | **Answered 2026-10-08: both are fine; both are proxies for now.** Long term, stage 3 becomes much more complex and part of a locomotion controller, which may or may not estimate physical properties directly. |
-| Q-2 | Europa-like OOD set: compliant silicone skin, or glassy skin (silicone is glassy at ~100 K, which changes contact stiffness by orders of magnitude)? | **Answered 2026-10-08: do not work on Europa deployment now.** It is motivation, far out of scope. The Europa catalog stays in the repo but is not in the near-term queue; Earth OOD sets (cold ice, sand, gravel) carry E-7. |
-| Q-3 | With literature friction ranges (glare ice 0.05–1.0 across temperature), glare ice and dry concrete are nearly indistinguishable by touch (same skin-dominated stiffness, invisible fine texture). That is physically honest, but it caps the classification ceiling. Keep it? | **Answered 2026-10-08: keep it.** There are no thermal sensors; if touch cannot tell them apart, that is a hardware limitation. |
-| Q-4 | Pushing failed (403): the machine was logged in as another person's GitHub account, which also authored the local commits. | resolved 2026-10-08: the user logged in as trevor386; the 42 local commits by the other identity were re-authored to trevor386 <trevorjohst@proton.me> (contents and dates unchanged) before the first push (`ce8835d..97ee0bf`, fast-forward). |
-
-## 6. Decisions
+## 5. Decisions
 
 | date | decision | why |
 |---|---|---|
-| 2026-10-08 | mjlab (MuJoCo-Warp) is the primary simulator; Isaac is kept for sim-to-sim. | Agrees with Isaac on the quantities that matter, 6× faster, physically tunable contact (`docs/mjlab.md`). |
-| 2026-10-08 | Version 0 archived; its results are not used as evidence for the hypothesis. | Mixed-modality stage 2, confounded baselines, synthetic sinkage cue (`docs/archive/README.md`). |
-| 2026-10-08 | Model v1 follows the stated intent: per-modality receptors (stage 1); spatial interaction within each modality (stage 2, a 3D kernel with a physical support radius; the graph approach kept as the alternative); modalities first meet in a dynamic, geometry-aware, recurrent stage 3. | User's design intent (receptors → spinal cord → brain); v0 mixed modalities in stage 2 and pooled statically. |
-| 2026-10-08 | The baselines get the same kinematics (body poses / sensor positions in the robot frame) and the same dropout augmentation. | Test the inductive bias, not the inputs. |
-| 2026-10-08 | Transformer baseline: (sensor, 100 ms) tokens, global attention; dead sensors read zero rather than being masked out of the attention. | Least-structured standard model; a dense mask over 2,000 tokens ran out of memory and blocks flash attention. |
-| 2026-10-08 | Simulation v1: physical terrain compliance (explicit contact pairs, stiff friction), no virtual sinkage, literature friction and roughness ranges, skin-filtered texture. | Remove the synthetic cue that favoured local operators by construction; realism against H-3. |
-| 2026-10-08 | Validation: rigid-support static checks run on the stiffest class of a compliant catalog; new check soft_terrain_sinks_deeper; no threshold changed. | On soft terrain the robot sinks physically, so "taxels at ground level" no longer applies there. |
-| 2026-10-08 | Protocol v4: budget max(3,000 steps, 15 epochs), validation every 250 steps, best-val checkpoint, bf16, widths matched. | v3's fixed 3,000 steps under-trained full-data runs (F0-11). |
-| 2026-10-08 | Every process that loads data or uses the GPU runs under a systemd memory cap; datasets load through the mmap cache. | RAM freeze (F-1). |
-| 2026-10-08 | Analysis is done in the main session; subagents only for bulky low-judgment work (literature, mechanical code) or easy Sonnet tasks. | User preference. |
-| 2026-10-08 | Tasks: 5-class classification and property estimation are both proxies; stage 3 will eventually feed a locomotion controller. Europa is motivation only (no near-term work). Touch-indistinguishable classes (glare ice vs concrete) stay. | User answers to Q-1 to Q-3. |
-| 2026-10-08 | Use tokens economically (session usage limits): lean reviews on Sonnet, no unnecessary polling. | User, 2026-10-08. |
-| 2026-10-09 | Main studies (E-1c, E-2) use the static pool head as stage 3; the brain head becomes research task T-19. | It stalls or memorizes on moving stimuli (F-17, F-19, F-20) and ties on terrain (F-18, F-19). |
+| 2026-10-08 | mjlab (MuJoCo-Warp) is the primary simulator; Isaac kept for sim-to-sim. | Agrees with Isaac, 6× faster, tunable contact (`docs/mjlab.md`). |
+| 2026-10-08 | Version 0 archived; its results are not evidence for the hypothesis. | Mixed-modality stage 2, confounded baselines, synthetic sinkage (`docs/archive/README.md`). |
+| 2026-10-08 | Model v1 follows the stated intent: per-modality receptors (stage 1), spatial interaction within each modality (stage 2: 3D kernel with a physical support radius; graph as alternative), modalities first meet in stage 3. | User's design intent (receptors → spinal cord → brain). |
+| 2026-10-08 | Baselines get the same kinematics and dropout augmentation; a transformer baseline is added (dead sensors read zero, no attention mask). | Test the inductive bias, not the inputs; a dense mask over 2,000 tokens ran out of memory. |
+| 2026-10-08 | Simulation v1: physical terrain compliance (explicit contact pairs, stiff friction), no virtual sinkage, literature friction and roughness, skin-filtered texture; validation thresholds unchanged. | Remove the synthetic cue; realism against H-3. |
+| 2026-10-08 | Protocol v4: max(3,000 steps, 15 epochs), validation every 250 steps, best-val checkpoint, bf16, widths matched. | v3 under-trained full-data runs (F0-11). |
+| 2026-10-08 | Tasks: classification and property estimation are both proxies (stage 3 will eventually feed a locomotion controller); Europa is motivation only; touch-indistinguishable classes stay (no thermal sensors). | User answers, 2026-10-08. |
+| 2026-10-09 | Main studies use the static pool head as stage 3; the brain head is research (T-19). | It stalls or memorizes on moving stimuli and ties on terrain (F-17 to F-20). |
+| 2026-10-10 | GPU work runs through `tools/jobq.py` (sequential, memory-capped, file-based waiting). | Ad-hoc queue scripts with `pgrep -f` waits deadlocked or killed themselves (2026-10-09/10). |

@@ -107,7 +107,8 @@ src/somato/
   sources/      SimSource, ReplaySource, HardwareSource template
   runtime/      OnlineEncoder (streaming inference with persistent state)
 configs/        robots, sensors, terrains, models, experiments
-scripts/        collect / train / data_efficiency / validate (+ scripts/isaac/*)
+scripts/        collect / train / data_efficiency / validate (+ scripts/isaac/*, scripts/mjlab/*, scripts/analysis/*)
+tools/          env.sh (environment) and jobq.py (sequential, memory-capped GPU job queue); see tools/README.md
 tests/          unit and integration tests (incl. a fake isaaclab module for the Isaac adapter)
 docs/           architecture.md, investigation_log.md (plan), findings.md (results), mjlab.md, isaac_sim.md,
                 references/ (literature), archive/ (version 0, with caveats)

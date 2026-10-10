@@ -13,6 +13,56 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-22. E-2, main learning curves (3 seeds): the structured models are 2–3× more data-efficient than both tuned
+baselines; most of it comes from stage 1.** *Why:* the main test of H-1, with H-4 and H-14.
+*Setup:*
+* `configs/experiments/v1_main_curves.yaml`: simulation v1, fixed FSR v1, protocol v4;
+* widths matched (~428k), learning rate per model from E-1c (F-21);
+* seeds 0–2, 360-episode test set.
+
+*Result (test acc, mean ± std over seeds):*
+
+| model | 42 eps | 168 | 420 | 1,680 | NLL (1,680) |
+|---|---|---|---|---|---|
+| somato_pool (receptors + 3D kernel + pool) | **0.490 ± 0.018** | **0.606 ± 0.016** | **0.676 ± 0.014** | **0.778 ± 0.004** | 0.50 |
+| receptor_only (receptors + pool) | 0.481 ± 0.006 | 0.597 ± 0.008 | 0.665 ± 0.012 | 0.759 ± 0.009 | 0.55 |
+| transformer | 0.405 ± 0.023 | 0.548 ± 0.022 | 0.608 ± 0.022 | 0.734 ± 0.008 | 0.63 |
+| flat_gru | 0.407 ± 0.017 | 0.531 ± 0.013 | 0.592 ± 0.015 | 0.684 ± 0.008 | 0.82 |
+
+*Evidence:*
+* somato_pool beats the transformer by +8.5 / +5.8 / +6.8 / +4.4 points and flat by +8.3 / +7.5 / +8.4 / +9.4. Every
+  gap is ≥ 2× the larger seed std.
+* Log-linear interpolation of the curves: the transformer needs ~2.1–2.5× as many episodes to match somato_pool, flat
+  ~3×.
+* The transformer gap halves over 40× data (8.5 → 4.4); the flat gap does not shrink. No crossover in range (H-4
+  partially: converging against the transformer).
+* receptor_only is consistently 1–2 points below somato_pool (~1 seed std) and 7–8 points above both baselines at
+  ≤ 420 episodes. Shared receptor encoders + pooling carry most of the benefit (H-14 supported); the 3D kernel adds a
+  small, consistent increment.
+* Per class (mean recall), full data:
+
+  | class | somato | transformer | flat |
+  |---|---|---|---|
+  | rough ice | **0.80** | 0.76 | 0.57 |
+  | packed snow | **0.76** | 0.65 | 0.67 |
+  | concrete | 0.83 | 0.83 | 0.76 |
+  | glare ice | 0.51 | 0.45 | 0.45 |
+  | fresh snow | 0.99 | 0.99 | 0.97 |
+
+  At 42 episodes the structured lead is fresh snow (0.95 vs 0.84 / 0.77) and concrete (0.59 vs 0.37 / 0.40).
+  Glare ice stays ~0.5 everywhere: the touch-ambiguous pair with concrete (Q-3).
+* Calibration: the structured models have the lowest NLL; flat is overconfident at small data (NLL 5.0 at 42
+  episodes).
+
+*Caveats:*
+* At full data most runs' best checkpoint is late in the budget (8,000–10,245 of 10,245 steps), so all models may gain
+  a little from more steps (E-1b; affects all similarly).
+* Simulation-only, one sensor technology (FSR), one task.
+
+*Implication:* H-1 supported in sim v1 (data efficiency, 2–3×). The useful prior on terrain is mainly "every taxel is
+the same kind of receptor" (stage 1); spatial structure matters more for moving stimuli (F-17). Next: robustness and
+OOD generalization (E-6, E-7), then property estimation (E-5).
+
 **F-21. E-1c, learning-rate sweep: learning rate barely matters; with tuned baselines the structured model leads by
 8–10 points at 10 % and 4.5–11 points at full data.** *Why:* baseline fairness before E-2. *Setup:*
 `configs/experiments/v1_e1c.yaml` (fixed FSR v1, pool head, widths matched ~428k), lr 3e-4 / 1e-3 / 3e-3, seed 0.
