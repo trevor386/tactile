@@ -59,6 +59,7 @@ def main():
     for path in sorted(glob.glob(args.runs)):
         info = LayoutInfo.from_layout(id_store.layout, id_store.desc)
         model, ckpt = load_trained_model(path, map_location=device, info=info)
+        model = model.to(device)  # load_trained_model returns the model on the CPU
         cfg = from_dict(ExperimentConfig, ckpt["experiment"])
         torch.manual_seed(0)
         test_ids = stratified_split(id_store.labels("terrain"), tuple(cfg.split), cfg.split_seed)[2]

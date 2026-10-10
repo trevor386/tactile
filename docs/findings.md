@@ -13,6 +13,68 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-24. E-7, unseen terrains: physically sensible mappings, but no model knows what it doesn't know.** *Why:* H-2b
+and H-13 (generalization to terrain never seen in training). *Setup:*
+* `scripts/analysis/ood_eval.py` on the E-2 full-data checkpoints (3 seeds);
+* OOD set `datasets/mjlab_v1_ood_earth_600`: cold arctic ice, dry sand, gravel (`configs/terrains/ood_earth_v1.yaml`);
+* AUROC = P(confidence on in-distribution test windows > confidence on OOD windows); 0.5 = indistinguishable.
+
+*Result (means over seeds):*
+
+| OOD terrain | predicted as | AUROC: somato / receptor / transformer / flat |
+|---|---|---|
+| cold arctic ice | concrete 0.63–0.77, rough ice 0.09–0.31 | 0.69 / 0.67 / 0.66 / 0.58 |
+| dry sand | packed and fresh snow, confidence 0.87–0.93 | 0.44 / 0.44 / 0.33 / 0.31 |
+| gravel | structured: rough ice ~0.50; baselines: spread over rough, packed, concrete | 0.61 / 0.62 / 0.66 / 0.60 |
+
+*Evidence:*
+* The class mappings follow the physics: hard, grippy ice → concrete; compliant sand → snow (also hard to tell apart
+  in the literature); bumpy gravel → rough ice, most consistently for the structured models.
+* Confidence separates in- from out-of-distribution poorly for every model. All are more confident on sand than on
+  their own test set.
+
+*Caveats:* AUROC on window-level max-softmax only (no calibration methods or ensembles); one OOD set.
+*Implication:*
+* Class posteriors are not a usable novelty signal, for structured and unstructured models alike.
+* For generalization to unseen terrain (the Europa motivation), physical property estimates are the meaningful output
+  (H-11). Next: E-5 (property estimation), then evaluate the property estimates on this OOD set (extend `ood_eval.py`,
+  T-21).
+
+**F-23. E-6, sensor robustness: structured models keep their lead, but every model that reads raw sensor dynamics has
+learned the simulated FSR hysteresis.** *Why:* H-2a and H-3 (sim-to-real proxy). *Setup:*
+* `scripts/analysis/robustness.py` with `configs/sensors/robustness_fsr_v1.yaml`;
+* E-2 checkpoints, 3 seeds × {10 %, 100 %};
+* the same noise draws for all models.
+
+*Result (full data, mean accuracy change over seeds, points):*
+
+| perturbation | somato_pool | receptor_only | transformer | flat_gru |
+|---|---|---|---|---|
+| slow unloading (100–300 ms) | −3.6 | −4.9 | −12.4 | −7.6 |
+| more hysteresis (17–30 %) | −7.8 | −10.6 | −8.8 | −1.1 |
+| no hysteresis (cleaner sensor) | −8.6 | −12.3 | −16.6 | −2.6 |
+| 3× noise | −1.0 | −0.2 | −0.1 | −4.2 |
+| gain spread 0.35 | −1.9 | −2.2 | −2.9 | −0.3 |
+| 10 % / 30 % dead taxels | −1.3 / −4.3 | −0.6 / −1.8 | −2.0 / −9.1 | −1.8 / −6.1 |
+| all combined | −14.7 | −13.3 | −14.9 | −14.8 |
+| accuracy under the combined shift | **0.637** | 0.627 | 0.589 | 0.537 |
+
+At 10 % data all drops are smaller (combined −3 to −6).
+
+*Evidence:*
+* The combined shift costs every model ~14 points, so the ranking is preserved; the structured models stay best in
+  absolute terms.
+* Per factor, the structured models are much more robust than the transformer to slower unloading and to dead taxels.
+* Yet changing the FSR hysteresis in *either* direction costs the models that read raw per-sample dynamics (stage 1,
+  transformer) 8–17 points. The flat GRU's coarse per-step statistics lose only 1–3 points there, but more under noise.
+
+*Caveats:* the perturbation magnitudes are assumptions (pessimistic end of the literature); simulation only.
+*Implication:*
+* Data efficiency does not automatically buy sensor robustness: stage 1 overfits the simulated sensor model's
+  dynamics, a concrete sim-to-real risk (H-3).
+* Natural next test, **E-21**: randomize sensor-model parameters (hysteresis, unloading time constants, gain) during
+  training and re-run E-6. A receptor stage trained across sensor variability is also closer to the biological idea.
+
 **F-22. E-2, main learning curves (3 seeds): the structured models are 2–3× more data-efficient than both tuned
 baselines; most of it comes from stage 1.** *Why:* the main test of H-1, with H-4 and H-14.
 *Setup:*
