@@ -1,5 +1,7 @@
 import copy
 import json
+import math
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -7,6 +9,7 @@ import torch
 from somato.control import GaitConfig
 from somato.data import (EpisodeStore, WindowDataset, collect_dataset, param_holdout, stratified_split,
                          stratified_subset)
+from somato.data.derived import add_measured_sinkage, capsule_segments
 from somato.data.episode import Episode
 from somato.geometry import LayoutInfo
 from somato.runtime import OnlineEncoder
@@ -170,6 +173,26 @@ def test_property_regression_task_transforms():
     assert torch.allclose(t._raw_prediction(z), vals, atol=1e-4)
     with pytest.raises(ValueError):
         PropertyRegressionTask("bad", targets=["friction"], log_targets=["sinkage_mm"])
+
+
+def test_measured_sinkage_uses_lowest_capsule_point(store):
+    """Sinkage is the penetration of a link capsule's lowest point, so a tilted link resting on its end is not read
+    as sunk (the old frame-origin depth did that), and a level link reads its true depth."""
+    ends, radius = capsule_segments(store.desc)
+    T, nb, r, th = 3, len(store.desc.bodies), float(radius[0]), 0.3
+    contact = torch.ones(T, nb)
+    level = torch.zeros(T, nb, 3)
+    level[..., 2] = r - 0.002  # level, 2 mm deep
+    tilted = torch.zeros(T, nb, 3)
+    tilted[..., 2] = r - 0.004  # pitched about y: the far end of the capsule dips
+    identity = torch.tensor([1.0, 0.0, 0.0, 0.0]).expand(T, nb, 4)
+    pitch = torch.tensor([math.cos(th / 2), 0.0, math.sin(th / 2), 0.0]).expand(T, nb, 4)
+    eps = [SimpleNamespace(params={}, labels={"in_contact": contact}, body_pos=p, body_quat=q)
+           for p, q in ((level, identity), (tilted, pitch))]
+    add_measured_sinkage(SimpleNamespace(desc=store.desc, episodes=eps))
+    far = float(ends[0, :, 0].max())  # the capsule axis lies along the link's x axis
+    assert abs(eps[0].params["sinkage_mm"] - 2.0) < 1e-3
+    assert abs(eps[1].params["sinkage_mm"] - 1e3 * (0.004 + far * math.sin(th))) < 1e-2
 
 
 @pytest.mark.parametrize("arch", ["hierarchical", "transformer"])

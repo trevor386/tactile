@@ -8,7 +8,8 @@
 base: configs/experiments/terrain_v1.yaml
 base_overrides:
   tasks:
-    props: {type: property_regression, targets: [friction, sinkage_mm], log_targets: [sinkage_mm]}
+    # eps: log(sinkage + 0.1 mm), so sub-0.1 mm differences on rigid ground (~0.05 mm) do not weigh like snow's mm
+    props: {type: property_regression, targets: [friction, sinkage_mm], log_targets: [sinkage_mm], eps: 0.1}
   train:
     select_metric: -props/zmae
 output_dir: runs/v1/properties
