@@ -1,10 +1,12 @@
+import copy
 import json
 
 import pytest
 import torch
 
 from somato.control import GaitConfig
-from somato.data import EpisodeStore, WindowDataset, collect_dataset, stratified_split, stratified_subset
+from somato.data import (EpisodeStore, WindowDataset, collect_dataset, param_holdout, stratified_split,
+                         stratified_subset)
 from somato.data.episode import Episode
 from somato.geometry import LayoutInfo
 from somato.runtime import OnlineEncoder
@@ -87,6 +89,21 @@ def test_windows_and_splits(store):
     assert torch.bincount(labels[a]).tolist() == [4] * 5
     sub = stratified_subset(a, labels, 0.5)
     assert torch.bincount(labels[sub]).tolist() == [2] * 5
+    values = torch.arange(40, dtype=torch.float)  # within each class, later episodes have higher values
+    high, low = param_holdout(values, labels, 0.25), param_holdout(values, labels, 0.25, side="low")
+    assert torch.bincount(labels[high]).tolist() == [2] * 5 and high.min() >= 30 and low.max() < 10
+
+
+def test_run_experiment_param_holdout(tmp_path, dataset_dir, store):
+    """Held-out episodes (top of each class's friction range) are excluded from training and evaluated separately."""
+    store = copy.copy(store)
+    store.episodes = store.episodes * 2  # enough episodes per class for a holdout and three splits (plumbing only)
+    cfg = ExperimentConfig(name="held", dataset=str(dataset_dir), output_dir=str(tmp_path), model=TINY_MODEL,
+                           sensors=IDEAL, train=TrainConfig(epochs=1, batch_size=4, output_steps=2), window=6,
+                           stride=6, eval_stride=6, split=(0.4, 0.3, 0.3), save_checkpoint=False,
+                           holdout={"param": "friction", "frac": 0.2})
+    result = run_experiment(cfg, store, verbose=False)
+    assert 0.0 <= result["holdout/terrain/acc_last"] <= 1.0 and "test/terrain/acc_last" in result
 
 
 def test_batch_preparer_augmentation(store):

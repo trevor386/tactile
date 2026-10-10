@@ -257,6 +257,19 @@ def stratified_split(labels: torch.Tensor, fractions: tuple[float, ...] = (0.7, 
     return [torch.tensor(sorted(p), dtype=torch.long) for p in parts]
 
 
+def param_holdout(values: torch.Tensor, labels: torch.Tensor, frac: float, side: str = "high") -> torch.Tensor:
+    """Within every class, the ``frac`` of episodes with the highest (``side="high"``) or lowest parameter ``values``:
+    a held-out part of each class's parameter range (E-9)."""
+    if side not in ("high", "low"):
+        raise ValueError(f"side must be 'high' or 'low', got {side!r}")
+    held = []
+    for c in labels.unique():
+        idx = (labels == c).nonzero().flatten()
+        order = idx[torch.argsort(values[idx], descending=side == "high", stable=True)]
+        held.extend(order[: round(frac * len(idx))].tolist())
+    return torch.tensor(sorted(held), dtype=torch.long)
+
+
 def stratified_subset(indices: torch.Tensor, labels: torch.Tensor, fraction: float, seed: int = 0,
                       min_per_class: int = 1) -> torch.Tensor:
     """A class-balanced random ``fraction`` of ``indices`` (for learning curves)."""

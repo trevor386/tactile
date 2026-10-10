@@ -10,7 +10,7 @@ from typing import Any
 
 import torch
 
-from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split, stratified_subset
+from somato.data.dataset import EpisodeStore, WindowDataset, param_holdout, stratified_split, stratified_subset
 from somato.data.derived import add_measured_sinkage
 from somato.geometry.layout import LayoutInfo
 from somato.models.batch import GroupSpec
@@ -47,6 +47,10 @@ class ExperimentConfig:
     split_seed: int = 0
     train_fraction: float = 1.0  # fraction of training episodes used (learning curves)
     input_groups: list[str] = field(default_factory=list)  # sensor groups fed to the model (empty = all)
+    # Held-out parameter range (E-9), e.g. ``{param: friction, frac: 0.3, side: high}``: within every class, that
+    # fraction of episodes with the highest (lowest) value of the episode parameter is excluded before the split and
+    # evaluated separately (``holdout/*`` metrics). Empty = off.
+    holdout: dict[str, Any] = field(default_factory=dict)
     save_checkpoint: bool = True
 
     @classmethod
@@ -128,7 +132,17 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     if cfg.input_groups:
         store = store.select_groups(cfg.input_groups)
     labels = store.labels("terrain")
-    train_ids, val_ids, test_ids = stratified_split(labels, tuple(cfg.split), cfg.split_seed)
+    held_ids = None
+    if cfg.holdout:
+        values = torch.tensor([float(ep.params[cfg.holdout["param"]]) for ep in store.episodes])
+        held_ids = param_holdout(values, labels, float(cfg.holdout["frac"]), cfg.holdout.get("side", "high"))
+        rest = torch.ones(len(labels), dtype=torch.bool)
+        rest[held_ids] = False
+        rest = rest.nonzero().flatten()
+        train_ids, val_ids, test_ids = (rest[p] for p in stratified_split(labels[rest], tuple(cfg.split),
+                                                                           cfg.split_seed))
+    else:
+        train_ids, val_ids, test_ids = stratified_split(labels, tuple(cfg.split), cfg.split_seed)
     if cfg.train_fraction < 1.0:
         train_ids = stratified_subset(train_ids, labels, cfg.train_fraction, seed=cfg.train.seed)
     gen = torch.Generator().manual_seed(cfg.train.seed)
@@ -171,6 +185,9 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
               f"val={len(val_ds)} test={len(test_ds)} device={device}")
     fit = trainer.fit(train_ds, val_ds)
     test = trainer.evaluate(test_ds)
+    held = {}
+    if held_ids is not None:  # windowed like the test split
+        held = trainer.evaluate(WindowDataset(store, held_ids, test_ds.window, test_ds.stride))
     result = {
         "name": cfg.name,
         "params": count_parameters(model),
@@ -180,6 +197,7 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
         "best_epoch": fit["best_epoch"],
         "best_step": fit["best_step"],
         **{f"test/{k}": v for k, v in test.items()},
+        **{f"holdout/{k}": v for k, v in held.items()},
     }
     cls_tasks = [t for t in task_list if isinstance(t, ClassificationTask)]
     if cls_tasks:
@@ -194,7 +212,7 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
         })
     if verbose:
         print(f"[{cfg.name}] test: " + ", ".join(f"{k}={v:.4f}" for k, v in result.items()
-                                                  if k.startswith("test/")))
+                                                  if k.startswith(("test/", "holdout/"))))
     return result
 
 
