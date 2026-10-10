@@ -42,6 +42,8 @@ class TrainConfig:
     num_workers: int = 0
     seed: int = 0
     patience: int = 0  # early stopping on the selection metric (0 = off)
+    # Validation metric that picks the kept checkpoint (higher is better; a leading "-" selects the lowest, e.g.
+    # "-props/zmae"). A metric missing from validation falls back to the lowest validation loss.
     select_metric: str = "terrain/acc_last"
     normalizer_batches: int = 8
     log_every: int = 0  # steps between progress prints (0 = once per epoch)
@@ -150,7 +152,9 @@ class Trainer:
                       **{f"train/{k}": v / n for k, v in acc["running"].items()}}
             if val_ds is not None and len(val_ds) > 0:
                 record.update({f"val/{k}": v for k, v in self.evaluate(val_ds).items()})
-                score = record.get(f"val/{cfg.select_metric}", -record.get("val/loss", 0.0))
+                metric = cfg.select_metric.lstrip("-")
+                sign = -1.0 if cfg.select_metric.startswith("-") else 1.0
+                score = sign * record[f"val/{metric}"] if f"val/{metric}" in record else -record.get("val/loss", 0.0)
                 if score > best["score"]:
                     best.update(score=score, epoch=epoch, step=step, bad=0, state=copy.deepcopy(self.model.state_dict()))
                 else:

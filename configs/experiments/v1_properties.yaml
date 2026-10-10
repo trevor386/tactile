@@ -1,19 +1,24 @@
 # E-5: terrain *property* estimation alongside classification (H-11): friction and the measured sinkage (how deep this
 # robot sinks; log-standardized) regressed from 0.5 s windows, plus the 5-class label. Properties transfer to terrains
 # without an Earth class label (cold ice, Europa-like, sand), which classification cannot. Each model gets a second head
-# of the same type as its first (configs/models/*), so the parameter budget grows equally for all.
+# of the same type as its first (configs/models/*), so the parameter budget grows equally for all. The E-2 models and
+# learning rates (F-21, F-22); the kept checkpoint is the one with the lowest validation property error, and its
+# terrain accuracy is reported as well.
 #   python scripts/data_efficiency.py --config configs/experiments/v1_properties.yaml
 base: configs/experiments/terrain_v1.yaml
 base_overrides:
   tasks:
     props: {type: property_regression, targets: [friction, sinkage_mm], log_targets: [sinkage_mm]}
+  train:
+    select_metric: -props/zmae
 output_dir: runs/v1/properties
 fractions: [0.1, 1.0]
-seeds: [0]
+seeds: [0, 1, 2]
 match_params: true
-save_checkpoints: true
-reference_model: somato_v1
+save_checkpoints: true      # for T-21 (property estimates on the OOD terrains)
+reference_model: somato_pool
 models:
-  somato_v1: configs/models/somato_v1.yaml
-  flat_gru: configs/models/flat_gru.yaml
-  transformer: configs/models/transformer.yaml
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}
