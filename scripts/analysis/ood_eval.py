@@ -1,4 +1,4 @@
-"""Out-of-distribution evaluation (E-7): how do trained terrain classifiers respond to terrains they never saw?
+"""Out-of-distribution evaluation (E-7, T-21): how do trained terrain models respond to terrains they never saw?
 
     python scripts/analysis/ood_eval.py --runs "runs/v1/main_curves/*/frac1.0_seed*/model.pt" \
         --id_dataset datasets/mjlab_v1_2400 --ood_dataset datasets/mjlab_v1_ood_earth_600 [--out runs/v1/ood_eval.csv]
@@ -7,8 +7,12 @@ For every checkpoint and every OOD class (e.g. cold arctic ice, dry sand, gravel
 * the histogram of predicted training classes;
 * the mean max-softmax confidence and predictive entropy, compared with the same quantities on the in-distribution
   test split.
+* for a model trained with a property head (E-5): the mean estimated and true value of each property (``est_*``,
+  ``true_*``) and the mean absolute error on the OOD class (``mae_*``) and on the in-distribution test split
+  (``mae_id_*``).
 
 An open-set-aware model should be *less* confident on unseen terrain (an AUROC of ID-vs-OOD by confidence above 0.5).
+Physical properties need no class label, so their errors on unseen terrain measure transfer directly.
 """
 
 import argparse
@@ -20,25 +24,31 @@ import torch
 
 from somato.data.dataset import EpisodeStore, WindowDataset, stratified_split
 from somato.geometry import LayoutInfo
-from somato.training.experiment import ExperimentConfig, build_suite, load_trained_model
+from somato.training.experiment import ExperimentConfig, build_suite, load_trained_model, prepare_store_for_tasks
 from somato.training.prepare import BatchPreparer
+from somato.training.tasks import PropertyRegressionTask, build_tasks
 from somato.training.trainer import resolve_device
 from somato.utils.config import from_dict
 
 
 @torch.no_grad()
-def softmax_outputs(model, store, ids, cfg, info, sensors, device, batch_size=64):
-    """Last-step class probabilities ``[W, C]`` and episode class ids ``[W]`` for the windows of episodes ``ids``."""
+def window_outputs(model, store, ids, cfg, info, sensors, device, props=None, batch_size=64):
+    """Last-step class probabilities ``[W, C]`` and episode class ids ``[W]`` for the windows of episodes ``ids``;
+    with a property task ``props`` also the estimated and true properties ``[W, n]`` in their original units."""
     ds = WindowDataset(store, ids, cfg.window, cfg.eval_stride)
     prep = BatchPreparer(store.layout, info, build_suite(store, sensors), device, cfg.augment)
-    probs, labels = [], []
+    probs, labels, est, true = [], [], [], []
     for sample in torch.utils.data.DataLoader(ds, batch_size=batch_size):
         batch = prep(sample, train=False)
         with torch.autocast(device.type, dtype=torch.bfloat16, enabled=device.type == "cuda"):
             out, _ = model(batch, output_steps=1)
         probs.append(out["terrain"][:, -1].float().softmax(-1).cpu())
         labels.append(batch.labels["terrain"].long().cpu())
-    return torch.cat(probs), torch.cat(labels)
+        if props is not None:
+            est.append(props._raw_prediction(out[props.head][:, -1].float()).cpu())
+            true.append(props.raw_targets(batch).cpu())
+    cat = lambda xs: torch.cat(xs) if xs else None  # noqa: E731
+    return torch.cat(probs), torch.cat(labels), cat(est), cat(true)
 
 
 def auroc(id_score: torch.Tensor, ood_score: torch.Tensor) -> float:
@@ -61,10 +71,15 @@ def main():
         model, ckpt = load_trained_model(path, map_location=device, info=info)
         model = model.to(device)  # load_trained_model returns the model on the CPU
         cfg = from_dict(ExperimentConfig, ckpt["experiment"])
+        props = next((t for t in build_tasks(cfg.tasks) if isinstance(t, PropertyRegressionTask)), None)
+        if props is not None:  # derived targets (measured sinkage) for both stores
+            prepare_store_for_tasks(id_store, [props])
+            prepare_store_for_tasks(ood_store, [props])
         torch.manual_seed(0)
         test_ids = stratified_split(id_store.labels("terrain"), tuple(cfg.split), cfg.split_seed)[2]
-        pid, _ = softmax_outputs(model, id_store, test_ids, cfg, info, ckpt["sensors"], device)
-        pood, yood = softmax_outputs(model, ood_store, torch.arange(len(ood_store)), cfg, info, ckpt["sensors"], device)
+        pid, _, est_id, true_id = window_outputs(model, id_store, test_ids, cfg, info, ckpt["sensors"], device, props)
+        pood, yood, est_ood, true_ood = window_outputs(model, ood_store, torch.arange(len(ood_store)), cfg, info,
+                                                       ckpt["sensors"], device, props)
         conf_id, conf_ood = pid.max(-1).values, pood.max(-1).values
         ent = lambda q: -(q * q.clamp_min(1e-12).log()).sum(-1)  # noqa: E731
         run = Path(path).parent
@@ -77,13 +92,21 @@ def main():
                          "auroc": auroc(conf_id, conf_ood[sel]),
                          **{f"pred_{n}": float(h) for n, h in zip(ckpt["terrain_names"], hist)}})
             r = rows[-1]
-            print(f"{r['model']:14s} {r['run']:16s} {name:16s} conf {r['conf_ood']:.2f} (ID {r['conf_id']:.2f}) "
-                  f"AUROC {r['auroc']:.2f} | " + " ".join(f"{n[:6]} {h:.2f}" for n, h in zip(ckpt["terrain_names"], hist)),
-                  flush=True)
+            line = (f"{r['model']:14s} {r['run']:16s} {name:16s} conf {r['conf_ood']:.2f} (ID {r['conf_id']:.2f}) "
+                    f"AUROC {r['auroc']:.2f} | " + " ".join(f"{n[:6]} {h:.2f}"
+                                                            for n, h in zip(ckpt["terrain_names"], hist)))
+            if props is not None:
+                for i, t in enumerate(props.targets):
+                    r.update({f"est_{t}": float(est_ood[sel, i].mean()), f"true_{t}": float(true_ood[sel, i].mean()),
+                              f"mae_{t}": float((est_ood[sel, i] - true_ood[sel, i]).abs().mean()),
+                              f"mae_id_{t}": float((est_id[:, i] - true_id[:, i]).abs().mean())})
+                    line += (f" | {t} est {r[f'est_{t}']:.3g} true {r[f'true_{t}']:.3g} "
+                             f"MAE {r[f'mae_{t}']:.3g} (ID {r[f'mae_id_{t}']:.3g})")
+            print(line, flush=True)
     if args.out and rows:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w = csv.DictWriter(f, fieldnames=list(dict.fromkeys(k for r in rows for k in r)))
             w.writeheader()
             w.writerows(rows)
 
