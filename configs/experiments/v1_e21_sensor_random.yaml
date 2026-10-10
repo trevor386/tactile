@@ -1,0 +1,23 @@
+# E-21: sensor-model randomization (H-2a, H-3). The E-2 models and learning rates (F-21, F-22) trained with a
+# randomized FSR (configs/sensors/fsr_v1_random.yaml), then evaluated like E-6 on the fixed fsr_v1 sensor and its
+# perturbations:
+#   python scripts/analysis/robustness.py --runs "runs/v1/sensor_random/*/frac1.0_seed*/model.pt" \
+#       --dataset datasets/mjlab_v1_2400 --suite configs/sensors/robustness_fsr_v1.yaml --out runs/v1/robustness_e21.csv
+# Questions: does stage 1 stop overfitting the simulated hysteresis (the "no_hysteresis" drop in F-23), what does
+# randomization cost on the nominal sensor, and do the structured models keep their lead? The test accuracy in this
+# study's results.csv is on randomized sensors; compare with E-2 through the robustness "nominal" row.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e21_sensor_random.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  sensors: configs/sensors/fsr_v1_random.yaml
+output_dir: runs/v1/sensor_random
+fractions: [0.1, 1.0]
+seeds: [0, 1, 2]
+match_params: true
+save_checkpoints: true
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}

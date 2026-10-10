@@ -1,0 +1,20 @@
+# FSR v1 with sensor-model randomization (E-21, T-22): every training window gets its own simulated skin, drawn from
+# ranges around the nominal fsr_v1 values, so a model cannot rely on one hysteresis signature (F-23). Evaluate on the
+# fixed fsr_v1 model with configs/sensors/robustness_fsr_v1.yaml. The ranges contain the nominal values and the
+# "no_hysteresis" sensor (interpolation); the other E-6 perturbations lie partly beyond them (hysteresis to 0.3,
+# unloading to 0.3 s, gain spread 0.35, creep 0.15, noise 0.01), which tests extrapolation.
+tactile:
+  model: fsr
+  params:
+    area: 1.0e-4
+    tau_unload: [0.02, 0.1]     # nominal fsr_v1 values; the randomized ranges below replace them in training
+    hysteresis: [0.07, 0.17]
+    randomize:
+      tau_unload: [0.01, 0.15]  # per-sample sub-range, then per taxel (log-uniform)
+      hysteresis: [0.0, 0.2]    # per-sample sub-range, then per taxel
+      gain_spread: [0.05, 0.25]
+      creep_frac: [0.0, 0.1]
+      creep_tau: [1.0, 3.0]
+      noise_std: [0.001, 0.005]
+joint: {model: motor}
+imu: {model: mems_imu}

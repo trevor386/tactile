@@ -63,6 +63,30 @@ def test_fsr_rate_independent_hysteresis_and_per_taxel_params():
     assert st["a_unload"].std() > 0 and 0.07 <= float(st["play_width"].min()) <= float(st["play_width"].max()) <= 0.17
 
 
+def test_fsr_randomization_per_sample():
+    """``randomize`` draws sensor parameters per sample within the given ranges; samples differ, chunked processing
+    with the carried state still equals processing at once, and unknown parameters are rejected."""
+    ranges = {"tau_unload": [0.02, 0.15], "hysteresis": [0.0, 0.2], "gain_spread": [0.05, 0.25],
+              "creep_frac": [0.0, 0.1], "creep_tau": [1.0, 3.0], "noise_std": [0.001, 0.005]}
+    m = SENSOR_MODELS.build("fsr", dt=1e-3, tau_unload=0.05, randomize=ranges)
+    x = torch.rand(64, 60, 20, 3) * 2e4
+    st = m.init_state(x, torch.Generator().manual_seed(0))
+    tau = 1e-3 / st["a_unload"] - 1e-3
+    assert 0.02 - 1e-6 <= float(tau.min()) and float(tau.max()) <= 0.15 + 1e-6
+    assert 0.0 <= float(st["play_width"].min()) and float(st["play_width"].max()) <= 0.2
+    assert st["play_width"].mean(-1).std() > 0.02  # the typical hysteresis differs between samples
+    for k in ("creep_frac", "creep_tau", "noise_std"):
+        lo, hi = ranges[k]
+        assert st[k].shape == (64, 1) and lo <= float(st[k].min()) <= float(st[k].max()) <= hi and st[k].std() > 0
+    m.noise_std, quiet = 0.0, {k: v for k, v in st.items() if k != "noise_std"}
+    full, _ = m(x, {k: v.clone() for k, v in quiet.items()})
+    a, s = m(x[:, :25], {k: v.clone() for k, v in quiet.items()})
+    b, _ = m(x[:, 25:], s)
+    assert torch.allclose(full, torch.cat([a, b], 1), atol=1e-5)
+    with pytest.raises(ValueError):
+        SENSOR_MODELS.build("fsr", dt=1e-3, randomize={"area": [1e-4, 2e-4]})
+
+
 def test_sensor_state_continuity():
     """Processing a sequence in two chunks with carried state equals processing it at once."""
     for name in ["fsr", "capacitive", "motor"]:
