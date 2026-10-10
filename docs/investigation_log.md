@@ -11,12 +11,12 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-10 12:00)
 
-* **Running:** E-5 (jobq `e5_properties`, ~5.5 h from 11:50, output `runs/v1/properties`). When done: summarize,
-  then run `ood_eval.py` on its `frac1.0` checkpoints (T-21 is ready) and write the finding. Check with
-  `python3 tools/jobq.py status`; after a reboot run `start`.
-* **Next, in order:**
-  1. **E-21**, sensor-model randomization against the hysteresis overfitting found in F-23 (T-22 first).
-  2. E-13b and E-1b.
+* **Running in jobq, in order** (~19 h from 11:50): `e5_properties` (E-5, `runs/v1/properties`) → `e5_ood`
+  (T-21 on its checkpoints, `runs/v1/ood_e5.csv`) → `e21_sensor_random` (E-21, `runs/v1/sensor_random`) →
+  `e21_robustness` (`runs/v1/robustness_e21.csv`) → `e13b_slide` (`runs/v1/e13b_slide`) → `e1b_budget`
+  (`runs/v1/e1b_budget`). Analyse each as it finishes and write its finding (F-25 onwards).
+  Check with `python3 tools/jobq.py status`; after a reboot run `start`.
+* **Next after the queue:** E-9 (held-out parameter ranges; config to write).
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -53,9 +53,9 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 %, 3 seeds, checkpoint by lowest validation property error; then their property estimates on the OOD set (`ood_eval.py`, T-21) | `configs/experiments/v1_properties.yaml` | ~5.5 h | **running** (jobq `e5_properties`, from 11:50) |
-| 2 | E-21 | Sensor-model randomization (H-2a, H-3) | Train with per-episode random FSR parameters (hysteresis 0–30 %, unloading 20–300 ms, gain spread) and re-run E-6. Does stage 1 stop overfitting the simulated hysteresis (F-23)? | to write: a sensor-config option for ranges drawn per sample | ~6 h | queued |
-| 3 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | adapt `configs/experiments/proxy_slide.yaml` | ~3 h | queued |
-| 4 | E-1b | Budget adequacy (H-12) | somato_pool and transformer at 25 % and 100 % with twice the v4 budget | to write | ~3 h | queued |
+| 2 | E-21 | Sensor-model randomization (H-2a, H-3) | The E-2 models trained with a FSR whose parameters are drawn per window (hysteresis 0–20 %, unloading 10–150 ms, gain spread 0.05–0.25, creep 0–10 %, noise 0.001–0.005), 10 % / 100 %, 3 seeds; then the E-6 suite on the fixed fsr_v1. "no_hysteresis" lies inside the ranges (interpolation), the other E-6 perturbations partly beyond (extrapolation). Does stage 1 stop overfitting the simulated hysteresis (F-23), what does it cost on the nominal sensor, is the lead kept? | `configs/experiments/v1_e21_sensor_random.yaml`, `configs/sensors/fsr_v1_random.yaml` | ~5.5 h + 0.5 h | queued in jobq after E-5 (`e21_sensor_random`, `e21_robustness`) |
+| 3 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | `configs/experiments/v1_e13b_slide.yaml` | ~3 h | queued in jobq (`e13b_slide`) |
+| 4 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | queued in jobq (`e1b_budget`) |
 | 4 | E-9 | Held-out parameter ranges (H-2b) | Train on part of the friction/compliance ranges, test on the rest | to write | ~3 h | queued |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
@@ -83,7 +83,7 @@ very long runs until earlier steps are sound.
 |---|---|---|---|
 | T-7b | Add felt roughness (texture amplitude × skin attenuation) as a property-regression target. | E-5 | queued |
 | T-21 | Extend `scripts/analysis/ood_eval.py` to property estimates (error vs the OOD set's true friction and measured sinkage) for models with a property head. | E-5 / E-7 | done (2026-10-10; tested on a smoke checkpoint) |
-| T-22 | Sensor-model randomization: let sensor params be ranges drawn per sample/episode during training (the FSR already draws per taxel); a randomized `configs/sensors/fsr_v1_random.yaml`. | E-21 | queued |
+| T-22 | Sensor-model randomization: let sensor params be ranges drawn per sample/episode during training (the FSR already draws per taxel); a randomized `configs/sensors/fsr_v1_random.yaml`. | E-21 | done (2026-10-10; FSR `randomize` option, per-window draws, per-sample sub-ranges for the per-taxel params; unit test) |
 | T-10 | Isaac parity for sim-to-sim: PhysX compliant contact per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac runs on driver 580. | E-8 | queued |
 | T-11 | SSL objectives (masked sensor prediction, reconstruction, next-step, cross-modal touch ↔ proprioception); trainer support for pretraining, freezing stages, task-specific last stage only. | E-14, E-15 | queued |
 | T-13 | Uneven terrain: mjlab heightfields per env; the taxel contact model must query the terrain height under each taxel (it assumes a plane). | E-16 | queued |

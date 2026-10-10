@@ -1,0 +1,19 @@
+# E-1b (H-12): is protocol v4's budget, max(3,000 steps, 15 epochs), enough for every model? The E-2 models and
+# learning rates with twice the budget (6,000 steps, 30 epochs; the cosine schedule stretches with it) at 25 % and
+# 100 % of the data, seed 0. Compare with E-2 (runs/v1/main_curves, 3 seeds): a gain beyond E-2's seed spread means
+# the v4 budget under-trains that model.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e1b_budget.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  train: {epochs: 30, min_steps: 6000}
+output_dir: runs/v1/e1b_budget
+fractions: [0.25, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}

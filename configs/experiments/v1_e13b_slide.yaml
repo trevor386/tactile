@@ -1,0 +1,19 @@
+# E-13b (H-9): the sliding-direction proxy of E-13 (configs/experiments/proxy_slide.yaml, F-17) with the E-2 models and
+# learning rates and 3 seeds. The direction is readable only from how the pressure pattern moves across neighbouring
+# taxels, so receptor_only (stage 1 + pooling, no spatial stage) vs somato_pool (+ 3D kernel) isolates stage 2.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e13b_slide.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  dataset: datasets/proxy_slide_1200
+  augment: {random_yaw: true, random_translation: 1.0, sensor_dropout: 0.05}
+output_dir: runs/v1/e13b_slide
+fractions: [0.1, 1.0]
+seeds: [0, 1, 2]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}
