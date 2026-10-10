@@ -1,0 +1,25 @@
+# E-9 (H-2b, H-11): extrapolation along the friction range. Within every class the 30 % highest-friction episodes are
+# held out of training, validation and test, and evaluated separately (holdout/* metrics); the models train on the
+# lower 70 % of each class's range (colder ice, grippier snow are unseen). Same tasks, models and learning rates as E-5
+# (F-25), full data, 3 seeds. Questions: how much do classification and the friction / sinkage estimates degrade on
+# the held-out range, compared with in-distribution episodes of similar friction in E-5 (MAE 0.07-0.10 at friction
+# >= 0.75), and does structure change that?
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e9_holdout.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  tasks:
+    props: {type: property_regression, targets: [friction, sinkage_mm], log_targets: [sinkage_mm], eps: 0.1}
+  train:
+    select_metric: -props/zmae
+  holdout: {param: friction, frac: 0.3, side: high}
+output_dir: runs/v1/e9_holdout
+fractions: [1.0]
+seeds: [0, 1, 2]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}

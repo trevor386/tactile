@@ -13,6 +13,73 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-25. E-5 + T-21, property estimation: every model reads friction and sinkage beyond the terrain class; the
+structured model is best in distribution (clearly for sinkage); on unseen terrain the estimates keep the right order
+and err on the conservative side.** *Why:* H-11 (are physical properties a better generalization target than class
+labels, and does structure help?), after F-24 found class posteriors give no novelty signal. *Setup:*
+* `configs/experiments/v1_properties.yaml`: friction and measured sinkage (penetration of the lowest capsule point, after
+  the label fix of 2026-10-10; regressed as log(sinkage + 0.1 mm)) plus the 5-class label;
+* the E-2 models and learning rates, 170 / 1,680 training episodes, 3 seeds;
+* the kept checkpoint has the lowest validation property error;
+* then `ood_eval.py` (T-21) on the full-data checkpoints with the E-7 OOD set.
+
+*Result, in distribution (test MAE, mean ± std over seeds):*
+
+| model | friction 10 % | friction 100 % | sinkage 10 % | sinkage 100 % | terrain acc 10 % / 100 % |
+|---|---|---|---|---|---|
+| somato_pool | **0.101 ± 0.004** | **0.062 ± 0.001** | **0.39 ± 0.04 mm** | **0.27 ± 0.01 mm** | 0.610 / 0.793 |
+| receptor_only | 0.104 ± 0.003 | 0.066 ± 0.000 | 0.50 ± 0.02 | 0.35 ± 0.02 | 0.598 / 0.770 |
+| flat_gru | 0.108 ± 0.006 | 0.064 ± 0.001 | 0.46 ± 0.02 | 0.28 ± 0.00 | 0.538 / 0.704 |
+| transformer | 0.115 ± 0.009 | 0.068 ± 0.001 | 0.46 ± 0.01 | 0.31 ± 0.01 | 0.566 / 0.736 |
+| *global mean* | 0.209 | | 1.82 | | |
+| *perfect class + class mean* | 0.135 | | 0.55 | | |
+
+*Result, unseen terrains (full data; estimate vs truth, mean over models; MAE range over models):*
+
+| OOD terrain | friction: true → estimated | friction MAE | sinkage: true → estimated | sinkage MAE |
+|---|---|---|---|---|
+| cold arctic ice | 0.99 → 0.78–0.80 | 0.22–0.25 | 0.045 → 0.06–0.07 mm | 0.03 |
+| gravel | 0.76 → 0.63–0.68 | 0.11–0.14 (somato 0.14) | 0.33 → 0.15–0.19 mm | 0.18–0.20 (somato 0.18) |
+| dry sand | 0.59 → 0.41–0.47 | 0.13–0.18 (somato 0.17) | 2.11 → 1.4–1.7 mm | 0.73–1.06 (somato **0.73**) |
+
+*Evidence:*
+* All models beat the "perfect classifier + class mean" reference on both properties (friction 0.06–0.07 vs 0.135 at
+  full data). They read the within-class variation (e.g. ice friction across temperature), which classification
+  cannot express.
+* somato_pool has the lowest error on every in-distribution metric. The margin is large for sinkage at 10 % (0.39 vs
+  ≥ 0.46 mm), small for friction (flat_gru is within 0.002 at full data).
+* receptor_only is the worst model on sinkage (0.35 vs 0.27 mm at full data). The 3D kernel (stage 2) matters for
+  sinkage, plausibly because sinkage shows in how far contact wraps around the body, a spatial pattern.
+* Multitask training did not hurt classification (somato_pool 0.610 / 0.793 vs 0.606 / 0.778 in E-2).
+* On the unseen terrains, every model ranks the three correctly on both properties (friction: cold ice > gravel >
+  sand; sinkage: sand > gravel > cold ice).
+* Every model underestimates friction on all three. Part of this is shrinkage at the top of the training range: in
+  distribution, test episodes with friction ≥ 0.9 (true 0.95) are estimated at 0.85 (MAE 0.10, flat_gru and
+  somato_pool alike). On cold ice the error is about twice that.
+* The OOD error relative to in-distribution episodes with similar values: friction 2–3× (gravel, sand), sinkage about
+  1× (gravel) to 1.1–1.5× (sand).
+* Structure helps the sinkage estimate on unseen terrain (sand 0.73 vs 0.87–1.06 mm) but not friction (the transformer
+  is best on sand and gravel, 0.125 / 0.111 vs somato 0.168 / 0.136).
+
+*Caveats:*
+* One OOD set of three terrains, simulated.
+* Cold-ice friction (0.99) is at the edge of the training range (glare ice reaches 0.999), so that row mostly tests the
+  range edge.
+* The in-distribution binning used seed 0 of two models (scratch analysis on the CPU).
+* Checkpoints were selected on property error, so terrain accuracy is not exactly comparable with E-2.
+
+*Implication:*
+* Property estimation works (signs of life) and transfers to unseen terrain far more usefully than class posteriors:
+  correct order, moderate degradation, and a conservative bias in friction (safer for a controller). This supports the
+  first half of H-11.
+* Structure helps property estimation in distribution and for sinkage out of distribution; it does not help friction
+  out of distribution. The data-efficiency advantage is much smaller than for classification: at 10 % somato_pool's
+  standardized error is 8 % below the best baseline, vs 2–3× fewer episodes for classification (F-22).
+* Next:
+  * E-9 should test extrapolation along the friction range directly (holdout option ready), with property
+    estimation as a task.
+  * E-21's randomized-sensor models should also be checked on properties later.
+
 **F-24. E-7, unseen terrains: physically sensible mappings, but no model knows what it doesn't know.** *Why:* H-2b
 and H-13 (generalization to terrain never seen in training). *Setup:*
 * `scripts/analysis/ood_eval.py` on the E-2 full-data checkpoints (3 seeds);
