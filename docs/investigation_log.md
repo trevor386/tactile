@@ -9,15 +9,14 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-10 11:45)
+## RESUME HERE (state as of 2026-10-10 12:00)
 
-* **Nothing running.** E-2 (F-22), E-6 (F-23) and E-7 (F-24) are done and analysed. The `tools/jobq.py` worker is
-  started; check with `python3 tools/jobq.py status`, and after a reboot run `start`.
+* **Running:** E-5 (jobq `e5_properties`, ~5.5 h from 11:50, output `runs/v1/properties`). When done: summarize,
+  then run `ood_eval.py` on its `frac1.0` checkpoints (T-21 is ready) and write the finding. Check with
+  `python3 tools/jobq.py status`; after a reboot run `start`.
 * **Next, in order:**
-  1. **E-5**, property estimation: first update `configs/experiments/v1_properties.yaml` to the E-2 models and
-     learning rates. Then T-21 (property estimates on the OOD set).
-  2. **E-21**, sensor-model randomization against the hysteresis overfitting found in F-23.
-  3. E-13b and E-1b.
+  1. **E-21**, sensor-model randomization against the hysteresis overfitting found in F-23 (T-22 first).
+  2. E-13b and E-1b.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -53,7 +52,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 %; then their property estimates on the OOD set (T-21) | `configs/experiments/v1_properties.yaml`: **update models to somato_pool / receptor_only / flat_gru / transformer with E-2 lrs first** | ~4 h | next |
+| 1 | E-5 | Property estimation (H-11) | Friction + measured sinkage regression with classification, the E-2 models at their learning rates, 10 % / 100 %, 3 seeds, checkpoint by lowest validation property error; then their property estimates on the OOD set (`ood_eval.py`, T-21) | `configs/experiments/v1_properties.yaml` | ~5.5 h | **running** (jobq `e5_properties`, from 11:50) |
 | 2 | E-21 | Sensor-model randomization (H-2a, H-3) | Train with per-episode random FSR parameters (hysteresis 0–30 %, unloading 20–300 ms, gain spread) and re-run E-6. Does stage 1 stop overfitting the simulated hysteresis (F-23)? | to write: a sensor-config option for ranges drawn per sample | ~6 h | queued |
 | 3 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | adapt `configs/experiments/proxy_slide.yaml` | ~3 h | queued |
 | 4 | E-1b | Budget adequacy (H-12) | somato_pool and transformer at 25 % and 100 % with twice the v4 budget | to write | ~3 h | queued |
@@ -83,7 +82,7 @@ very long runs until earlier steps are sound.
 | ID | task | for | status |
 |---|---|---|---|
 | T-7b | Add felt roughness (texture amplitude × skin attenuation) as a property-regression target. | E-5 | queued |
-| T-21 | Extend `scripts/analysis/ood_eval.py` to property estimates (error vs the OOD set's true friction and measured sinkage) for models with a property head. | E-5 / E-7 | queued |
+| T-21 | Extend `scripts/analysis/ood_eval.py` to property estimates (error vs the OOD set's true friction and measured sinkage) for models with a property head. | E-5 / E-7 | done (2026-10-10; tested on a smoke checkpoint) |
 | T-22 | Sensor-model randomization: let sensor params be ranges drawn per sample/episode during training (the FSR already draws per taxel); a randomized `configs/sensors/fsr_v1_random.yaml`. | E-21 | queued |
 | T-10 | Isaac parity for sim-to-sim: PhysX compliant contact per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac runs on driver 580. | E-8 | queued |
 | T-11 | SSL objectives (masked sensor prediction, reconstruction, next-step, cross-modal touch ↔ proprioception); trainer support for pretraining, freezing stages, task-specific last stage only. | E-14, E-15 | queued |

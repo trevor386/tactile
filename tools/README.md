@@ -26,6 +26,8 @@ Rules it encodes:
 * waiting reads job files only, never process names. `pgrep -f` loops in waiters matched their own command lines and
   deadlocked or killed themselves twice.
 
-Jobs run `bash -c "source tools/env.sh && <command>"` from the repo root, so commands use repo-relative paths. The
+Jobs run `bash -c "source tools/env.sh && <command>"` from the repo root, so commands use repo-relative paths.
+Arguments after `--` are stored quoted, exactly as typed (a quoted glob reaches the program unexpanded); a single
+argument is taken as a shell string (`-- "cmd1 && cmd2"`). The
 worker keeps running after the Claude session ends. After a reboot, `start` resumes the queued jobs; a job that was
 running at the time shows as `running?` and has to be added again.

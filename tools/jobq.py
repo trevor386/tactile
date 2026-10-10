@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -81,7 +82,8 @@ def cmd_add(args) -> None:
     if any(j["name"] == args.name and j["state"] not in FINAL for _, j in jobs):
         sys.exit(f"a job named {args.name!r} is already queued or running")
     jid = max((j["id"] for _, j in jobs), default=0) + 1
-    cmd = " ".join(args.cmd)
+    # Several arguments are quoted (globs reach the program unexpanded, as typed); a single argument is a shell string.
+    cmd = args.cmd[0] if len(args.cmd) == 1 else shlex.join(args.cmd)
     if not cmd:
         sys.exit("no command given (tools/jobq.py add NAME [--mem 24G] -- CMD ...)")
     job = {"id": jid, "name": args.name, "cmd": cmd, "mem": args.mem, "state": "queued", "exit": None,
