@@ -13,6 +13,61 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-26. E-21, sensor-model randomization removes the hysteresis shortcut at almost no cost, and widens the structured
+lead under sensor shift.** *Why:* F-23 found that every model reading raw sensor dynamics had learned the simulated
+FSR hysteresis (H-2a, H-3). *Setup:*
+* `configs/experiments/v1_e21_sensor_random.yaml`: the E-2 models and learning rates, 3 seeds, 10 % / 100 % of the data;
+* training sensor `configs/sensors/fsr_v1_random.yaml`, one FSR drawn per window: hysteresis 0–20 % and unloading
+  10–150 ms (per-sample sub-ranges, then per taxel), gain spread 0.05–0.25, creep 0–10 %, noise 0.001–0.005;
+* evaluation exactly as E-6 (`robustness.py`, fixed fsr_v1 plus perturbations, full-data checkpoints).
+  "No hysteresis" lies inside the training ranges; more hysteresis, slow unloading, noise, gain spread and creep lie
+  partly beyond them.
+
+*Result (full data, mean over 3 seeds; change vs the nominal sensor in points, E-6 → E-21):*
+
+| perturbation | somato_pool | receptor_only | transformer | flat_gru |
+|---|---|---|---|---|
+| nominal accuracy | 0.784 → 0.776 | 0.760 → 0.752 | 0.738 → 0.709 | 0.686 → 0.695 |
+| no hysteresis (inside range) | −8.6 → **+0.3** | −12.3 → **−0.3** | −16.6 → **+0.3** | −2.6 → +1.8 |
+| slow unloading (beyond) | −3.6 → −2.0 | −4.9 → −2.3 | −12.4 → −4.3 | −7.6 → −5.5 |
+| more hysteresis (beyond) | −7.8 → −5.3 | −10.6 → −6.2 | −8.8 → −6.7 | −1.2 → −1.5 |
+| 3× noise (beyond) | −1.0 → −0.6 | −0.2 → −0.3 | −0.2 → +0.1 | −4.2 → −0.5 |
+| 30 % dead taxels (not randomized) | −4.3 → −3.3 | −1.8 → −1.2 | −9.1 → −3.6 | −6.1 → −6.6 |
+| all combined | −14.7 → −8.2 | −13.3 → −8.5 | −14.9 → −9.6 | −14.8 → −8.5 |
+| accuracy under the combined shift | 0.637 → **0.694** | 0.627 → 0.667 | 0.589 → 0.612 | 0.538 → 0.610 |
+
+Test accuracy on randomized sensors (this study's `results.csv`), at 10 % / 100 %:
+* somato_pool 0.605 / 0.776;
+* receptor_only 0.590 / 0.749;
+* transformer 0.539 / 0.708;
+* flat_gru 0.525 / 0.703.
+
+*Evidence:*
+* The hysteresis shortcut is gone: the no-hysteresis drop is within ±2 points for every model, from up to −17.
+* Robustness also improves beyond the trained ranges: slow unloading, gain spread and noise drops shrink. Larger
+  hysteresis still costs the stage-1 and transformer models 5–7 points, as expected when extrapolating from 0–20 % to
+  17–30 %.
+* The nominal cost is small for the structured models (−0.8 points) and larger for the transformer (−2.9).
+* The structured lead under the combined shift grows from +4.8 to +8.2 points over the best baseline. somato_pool keeps
+  its lead on every single perturbation.
+* Data efficiency under randomized training is preserved: at 10 % somato_pool leads the transformer by 6.6 points (5.8
+  in E-2). Seed std ≤ 0.012 throughout.
+
+*Caveats:*
+* The perturbation magnitudes and the randomization ranges are both assumptions.
+* Simulation only.
+* Robustness was measured on the full-data checkpoints only.
+* Property estimation under randomized sensors is untested.
+
+*Implication:*
+* Sensor-model randomization fixes the sim-to-real risk found in F-23 for the shifts it covers, and helps somewhat
+  beyond them. Larger hysteresis than trained remains a risk, so the ranges should be set from bench measurements of
+  the real skin.
+* H-2a becomes **supported** with randomized training: the structured models are both the most accurate and, under the
+  combined shift, the most robust.
+* Proposed default for future studies: train on `fsr_v1_random` (after the current queue, whose experiments compare
+  against fixed-sensor results).
+
 **F-25. E-5 + T-21, property estimation: every model reads friction and sinkage beyond the terrain class; the
 structured model is best in distribution (clearly for sinkage); on unseen terrain the estimates keep the right order
 and err on the conservative side.** *Why:* H-11 (are physical properties a better generalization target than class

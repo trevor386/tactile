@@ -9,15 +9,14 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-10 18:45)
+## RESUME HERE (state as of 2026-10-11 01:00)
 
-* **Done today:** E-5 + T-21 (F-25).
-* **Running in jobq, in order** (~16 h from 18:20): `e21_sensor_random` (E-21, `runs/v1/sensor_random`) →
-  `e21_robustness` (`runs/v1/robustness_e21.csv`) → `e13b_slide` (`runs/v1/e13b_slide`) → `e1b_budget`
+* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26).
+* **Running in jobq, in order** (~10 h from 00:40): `e13b_slide` (`runs/v1/e13b_slide`) → `e1b_budget`
   (`runs/v1/e1b_budget`) → `e9_holdout` (`runs/v1/e9_holdout`). Analyse each as it finishes and write its finding
-  (F-26 onwards). Check with `python3 tools/jobq.py status`; after a reboot run `start`.
-* **Next after the queue:** E-12 (sensor technology) or E-10 (layout generalization); T-19 (stage 3) is the open
-  research task.
+  (F-27 onwards). Check with `python3 tools/jobq.py status`; after a reboot run `start`.
+* **Next after the queue:** E-12 (sensor technology) or E-10 (layout generalization), trained on `fsr_v1_random`
+  (proposed default, F-26); T-19 (stage 3) is the open research task.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -32,8 +31,8 @@ data. The structure is a starting point, changed only on evidence.
 | ID | hypothesis / conjecture | status |
 |---|---|---|
 | H-1 | The structured hierarchy is more data-efficient than the flat GRU and the transformer (equal parameters, same inputs incl. kinematics). | **supported in sim v1** (F-22: 2–3× fewer episodes, gaps ≥ 2 seed std at all sizes) |
-| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) mixed (F-23): equal drop under the combined shift (lead kept), more robust than the transformer to unloading and dead taxels, but stage 1 overfits the simulated hysteresis (E-21). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25); E-9 next. (c) E-8. (d) E-10. |
-| H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics (E-21). |
+| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25); E-9 next. (c) E-8. (d) E-10. |
+| H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics; sensor-model randomization removes it (F-26). |
 | H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
 | H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17). E-12 for sensor physics. |
 | H-6 | The continuous 3D kernel beats feature-dependent graph message passing. | weakly supported (F-18, one seed) |
@@ -53,10 +52,9 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-21 | Sensor-model randomization (H-2a, H-3) | The E-2 models trained with a FSR whose parameters are drawn per window (hysteresis 0–20 %, unloading 10–150 ms, gain spread 0.05–0.25, creep 0–10 %, noise 0.001–0.005), 10 % / 100 %, 3 seeds; then the E-6 suite on the fixed fsr_v1. "no_hysteresis" lies inside the ranges (interpolation), the other E-6 perturbations partly beyond (extrapolation). Does stage 1 stop overfitting the simulated hysteresis (F-23), what does it cost on the nominal sensor, is the lead kept? | `configs/experiments/v1_e21_sensor_random.yaml`, `configs/sensors/fsr_v1_random.yaml` | ~5.5 h + 0.5 h | **running** (jobq `e21_sensor_random` from 18:20, then `e21_robustness`) |
-| 2 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | `configs/experiments/v1_e13b_slide.yaml` | ~3 h | queued in jobq (`e13b_slide`) |
-| 3 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | queued in jobq (`e1b_budget`) |
-| 4 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9_holdout`) |
+| 1 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | `configs/experiments/v1_e13b_slide.yaml` | ~3 h | **running** (jobq `e13b_slide` from 00:40) |
+| 2 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | queued in jobq (`e1b_budget`) |
+| 3 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9_holdout`) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -68,6 +66,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-21, sensor-model randomization (F-26).
 * E-5, property estimation, with T-21 on the OOD set (F-25).
 * E-6, sensor robustness (F-23).
 * E-7, OOD terrains, class posteriors (F-24).
@@ -139,3 +138,4 @@ Done tasks are in the commits and in `docs/findings.md`:
 | 2026-10-10 | The measured-sinkage target is the penetration of each link capsule's lowest point (`data/derived.py`), regressed as log(sinkage + 0.1 mm); E-5 restarted with it. | The frame-origin depth read link tilt as sinkage: 0.8 ± 0.5 mm on rigid ground vs 0.05 mm true (packed snow 0.47, fresh snow 6.4 mm), so it was mostly pose noise outside fresh snow. No finding had used it. |
 | 2026-10-10 | E-5 keeps the checkpoint with the lowest validation property error (`select_metric: -props/zmae`). | E-5 is about property estimates; terrain accuracy is reported at that checkpoint. |
 | 2026-10-10 | E-21's randomization ranges contain the nominal sensor and "no hysteresis" but stop short of most E-6 perturbations. | Tests both interpolation (the F-23 failure) and extrapolation beyond the trained range. |
+| 2026-10-11 | Proposed (user may veto): studies after the current queue train on `configs/sensors/fsr_v1_random.yaml`; E-13b, E-1b and E-9 stay on fixed fsr_v1 to compare with E-13, E-2 and E-5. Ranges to be refit from bench data when the real skin exists. | F-26: removes the hysteresis shortcut, −0.8 points nominal for the structured models, +4–7 points under the combined shift. |
