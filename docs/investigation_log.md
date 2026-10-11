@@ -9,17 +9,19 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 15:00)
+## RESUME HERE (state as of 2026-10-11 16:20)
 
-* **Running:** E-23 (compute-matched flat GRU, jobq `e23_compute_matched`, ~1.5 h from 14:50). Then F-32.
+* **Running in jobq** (~7.5 h from 16:15): `e23_seeds` (E-23 seeds 1–2) → `e12_fsr_random` → `e12_ideal_shear` →
+  `e12_capacitive`. Write F-33 (E-23) and F-34 (E-12).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
-  runtime (F-31).
+  runtime (F-31), E-10 layout (F-32).
 * **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
   locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
   pursued.
 * **New defaults:** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR, protocol v5 =
   max(6,000 steps, 15 epochs)). Check baseline learning rates on each new task (F-30).
-* **Next:** E-10 (layout generalization), then E-12 (sensor technology), on `terrain_v1b`.
+* **Next after E-12:** pick from E-11 (larger data, H-4), E-18 (streaming / long horizon, also needed for CPU real
+  time), a compliance holdout (E-9 follow-up), 12-link fine-tuning (E-10 follow-up); E-14/E-15 need T-11 (SSL).
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -34,7 +36,7 @@ data. The structure is a starting point, changed only on evidence.
 | ID | hypothesis / conjecture | status |
 |---|---|---|
 | H-1 | The structured hierarchy is more data-efficient than the flat GRU and the transformer (equal parameters, same inputs incl. kinematics). | **supported in sim v1** (F-22: 2–3× fewer episodes, gaps ≥ 2 seed std at all sizes) |
-| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). (c) E-8. (d) E-10. |
+| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). (c) E-8. (d) **supported** (F-32): 4 dead links cost the structured model 1 point vs 4–6 for the baselines; zero-shot to 2× taxel density −1 point, to a 12-link robot −4.5; the baselines cannot run on another layout. |
 | H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics; sensor-model randomization removes it (F-26). |
 | H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
 | H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17). E-12 for sensor physics. |
@@ -55,10 +57,9 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
+| 1 | E-23 | Compute-matched baselines (user, 2026-10-11) | Match by online cost instead of parameters: the flat GRU has 7–19× latency headroom at matched parameters (F-31), so widths 512 / 1,024 / 2,048 (2,048 ≈ somato_pool's GPU window latency) at lr 3e-4 / 1e-4, 10 % / 100 %, E-2 settings. Seed 0 done: best 0.548 / 0.705 (lr 1e-4) vs E-2 flat 0.531 / 0.684 and somato_pool 0.606 / 0.778. Seeds 1–2 of the two lr-1e-4 models running. The transformer is already within 1.3× on the GPU (slower on the CPU), so it is not scaled | `v1_e23_compute_matched.yaml`, `v1_e23_seeds.yaml` | ~1 h left | **running** (jobq `e23_seeds`) |
+| 2 | E-12 | Sensor technology (H-5) | The E-2 models on `terrain_v1b` (protocol v5), seed 0, 10 % / 100 %, three skins: randomized FSR (reference under v5), ideal with shear (upper bound), capacitive. somato_pool vs receptor_only gives stage 2's value per skin. Learning rates from the FSR (caveat) | `configs/experiments/v1_e12_sensor_tech.yaml` (+ `--set` per skin), `configs/sensors/ideal_shear_v1.yaml` | ~6.5 h | queued in jobq (`e12_fsr_random`, `e12_ideal_shear`, `e12_capacitive`) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 1 | E-23 | Compute-matched baselines (user, 2026-10-11) | Match by online cost instead of parameters: the flat GRU has 7–19× latency headroom at matched parameters (F-31), so widths 512 / 1,024 / 2,048 (2,048 ≈ somato_pool's GPU window latency) at lr 3e-4 / 1e-4, 10 % / 100 %, seed 0, E-2 settings; seeds and the full curve if it changes the picture. The transformer is already within 1.3× on the GPU (slower on the CPU), so it is not scaled | `configs/experiments/v1_e23_compute_matched.yaml` | ~1.5 h | **running** (jobq from 14:50) |
-| 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
-| 2 | E-10 | Layout generalization (H-2d) | E-21 checkpoints (randomized-FSR training), no retraining: (a) whole links' skin dead (1 / 2 / 4 of 16) vs 25 % random dead taxels, all four models; (b) zero-shot on new layouts, structured models only (the baselines are tied to one layout): 2× taxel density (4 × 12 per link) and a 12-link snake, 400 new mjlab episodes each, all episodes evaluated | `configs/sensors/robustness_layout_v1.yaml`, `configs/robots/snake_3d_dense.yaml`, `snake_3d_12links.yaml` | < 1 h | queued in jobq after E-23 (`e10_collect`, `e10_dead_links`, `e10_dense`, `e10_links12`) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
@@ -67,6 +68,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-10, layout generalization (F-32); fine-tuning on the 12-link robot is a possible follow-up.
 * E-22, baseline fairness on the slide test (F-30).
 * E-9, held-out friction range (F-29); a compliance holdout is a possible follow-up.
 * E-1b, training budget (F-28).

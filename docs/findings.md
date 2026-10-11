@@ -13,6 +13,60 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-32. E-10, layout generalization: the structured models shrug off contiguous skin loss and transfer zero-shot to a
+denser skin (−1 point) and a shorter robot (−4.5 points); the baselines lose 4–6 points to dead links and cannot run on
+another layout at all.** *Why:* H-2d. A deployed skin loses whole segments (connectors, tears), and the same encoder
+should serve other robots and skins. *Setup:*
+* E-21 full-data checkpoints (randomized-FSR training), 3 seeds, no retraining; evaluation on the fixed fsr_v1;
+* `scripts/analysis/robustness.py` with `configs/sensors/robustness_layout_v1.yaml`:
+  * new option `eval_dead_links`: all taxels of k random links are dead (masked; the baselines read zeros);
+* new-layout test sets, 400 mjlab episodes each, all episodes evaluated, collection seed 0:
+  * `mjlab_v1_dense_400`: 4 × 12 taxels per link, 768 taxels;
+  * `mjlab_v1_links12_400`: 12 links, 288 taxels;
+  * `mjlab_v1_control_400`: the original layout. Same seed and environment count, so it is a paired control with the
+    same terrain and gait draws (training data used seed 1).
+
+*Result (a), training layout (test split), change from nominal in points:*
+
+| model | nominal | 1 dead link | 2 | 4 (25 % of the skin) | 25 % random dead taxels |
+|---|---|---|---|---|---|
+| somato_pool | 0.776 | 0.0 | −0.4 | **−1.1** | −2.6 |
+| receptor_only | 0.752 | −0.6 | −0.9 | −1.4 | −1.0 |
+| transformer | 0.709 | −0.4 | −1.4 | −4.0 | −2.3 |
+| flat_gru | 0.695 | −2.2 | −3.7 | −6.3 | −5.4 |
+
+*Result (b), zero-shot on new layouts (accuracy, mean of 3 seeds, seed std ≤ 0.011):*
+
+| model | paired control (training layout) | 2× taxel density | 12-link robot |
+|---|---|---|---|
+| somato_pool | 0.805 | 0.794 (−1.1) | 0.760 (−4.5) |
+| receptor_only | 0.771 | 0.763 (−0.8) | 0.708 (−6.3) |
+| flat_gru, transformer | — | cannot run | cannot run |
+
+*Evidence:*
+* With 4 of 16 links' skin dead, somato_pool loses 1.1 points; the baselines lose 4.0 (transformer) and 6.3 (flat).
+  The structured models pool over whichever sensors are alive, and stage 1 is shared, so no weight depends on one
+  link's skin. The flat GRU's per-input weights do.
+* For somato_pool, contiguous loss hurts less than the same number of scattered dead taxels (−1.1 vs −2.6).
+  Scattered loss thins every neighbourhood of the spatial stage; contiguous loss leaves the remaining neighbourhoods
+  intact.
+* A skin with twice the taxels (each sensor's neighbourhood in the 45 mm kernel twice as dense) costs ~1 point
+  without retraining.
+* A 12-link robot (different dynamics as well as a different skin) costs 4.5 points for somato_pool, 6.3 for
+  receptor_only. Part of this is physics: the shorter, lighter body moves differently on the same terrain.
+
+*Caveats:*
+* Single-terrain-distribution test sets of 400 episodes; the paired control removes most of the sampling noise.
+* The 12-link set's gait draws may differ from the control's (fewer joints).
+* Taxel area and sensor parameters were kept as trained, so a denser skin with smaller real taxels would differ.
+* The baselines could only be tested in (a).
+
+*Implication:*
+* H-2d is supported. Layout independence is a real capability of the structured design: robust to contiguous damage,
+  transferable to other skins and robots, while the baselines are tied to one layout by construction.
+* A fine-tuning test on the 12-link robot (how many episodes recover the gap) would quantify transfer cost; possible
+  follow-up.
+
 **F-31. Runtime (T-23): on this GPU every model runs well inside the 20 ms budget; on a CPU only the flat GRU (window
 mode) and the recurrent models in streaming mode do. At matched parameters the flat GRU is 7–19× cheaper than
 somato_pool, so it has room to grow (E-23). The simulator runs at 0.34× real time for one robot.** *Why:* the user

@@ -1,0 +1,20 @@
+# E-12 (H-5): how do the model ranking and stage 2's value (somato_pool vs receptor_only) depend on the touch
+# technology? The E-2 models and learning rates on the new base (randomized FSR, protocol v5), seed 0, 10 % / 100 %.
+# One run per skin, selected with --set:
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e12_sensor_tech.yaml          # FSR v1 randomized
+#   ... --set base_overrides.sensors=configs/sensors/ideal_shear_v1.yaml output_dir=runs/v1/e12_ideal_shear
+#   ... --set base_overrides.sensors=configs/sensors/capacitive.yaml output_dir=runs/v1/e12_capacitive
+# Caveat: learning rates were tuned on the FSR (F-21).
+base: configs/experiments/terrain_v1b.yaml
+base_overrides: {}
+output_dir: runs/v1/e12_fsr_random
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  receptor_only: {model: configs/models/somato_v1_receptor.yaml, train: {lr: 0.001}}
+  flat_gru: {model: configs/models/flat_gru.yaml, train: {lr: 0.0003}}
+  transformer: {model: configs/models/transformer.yaml, train: {lr: 0.001}}

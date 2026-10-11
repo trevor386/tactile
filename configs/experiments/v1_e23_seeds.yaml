@@ -1,0 +1,16 @@
+# E-23 seeds 1-2 for the compute-matched flat GRU (the two best of v1_e23_compute_matched.yaml, lr 1e-4): width 1024
+# (best at 100 %) and 2048 (≈ somato_pool's GPU latency, best at 10 %). E-2 settings; compare with E-2's 3 seeds.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e23_seeds.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/e23_seeds
+fractions: [0.1, 1.0]
+seeds: [1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  flat_w1024_lr1e-4:
+    model: {architecture: flat_recurrent, hidden: 1024, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0001}
+  flat_w2048_lr1e-4:
+    model: {architecture: flat_recurrent, hidden: 2048, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0001}

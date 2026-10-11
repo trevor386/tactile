@@ -1,0 +1,5 @@
+# E-12: an ideal skin that also senses shear (normal, shear_x, shear_y in kPa, no noise, no dynamics), with the realistic
+# joint and IMU models of fsr_v1.yaml, so only the touch technology differs. An upper bound on what touch can tell.
+tactile: {model: ideal_tactile, params: {shear: true}}
+joint: {model: motor}
+imu: {model: mems_imu}
