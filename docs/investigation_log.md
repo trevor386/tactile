@@ -9,11 +9,11 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 10:40)
+## RESUME HERE (state as of 2026-10-11 11:45)
 
-* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28).
-* **Running in jobq, in order:** `e9_holdout` (E-9, from 08:20, ~3 h) → `e22_slide_fairness` (~1.2 h) →
-  `e22_terrain_fullpose` (~0.5 h). Write F-29 (E-9) and F-30 (E-22). Check with `python3 tools/jobq.py status`; after
+* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29).
+* **Running in jobq, in order:** `e22_slide_fairness` (from 11:30, ~1.2 h) → `e22_terrain_fullpose` (~0.5 h). Write
+  F-30 (E-22). Check with `python3 tools/jobq.py status`; after
   a reboot run `start`.
 * **New defaults (user, 2026-10-11):** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR,
   protocol v5 = max(6,000 steps, 15 epochs)).
@@ -38,7 +38,7 @@ data. The structure is a starting point, changed only on evidence.
 | ID | hypothesis / conjecture | status |
 |---|---|---|
 | H-1 | The structured hierarchy is more data-efficient than the flat GRU and the transformer (equal parameters, same inputs incl. kinematics). | **supported in sim v1** (F-22: 2–3× fewer episodes, gaps ≥ 2 seed std at all sizes) |
-| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25); E-9 next. (c) E-8. (d) E-10. |
+| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). (c) E-8. (d) E-10. |
 | H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics; sensor-model randomization removes it (F-26). |
 | H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
 | H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17). E-12 for sensor physics. |
@@ -47,7 +47,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without, baselines near chance) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
-| H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25). E-9 next. |
+| H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25, F-29: friction error doubles beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
 | H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
@@ -59,8 +59,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq `e9_holdout` from 08:20) |
-| 2 | E-22 | Baseline fairness on the slide test (user, 2026-10-11) | Code check: flat GRU gets every body's pose (complete); transformer lacked the along-link axis and fine position encoding. Slide proxy at 840 episodes, seed 0: `transformer_fullpose` (position + x and z axes, Fourier bands to ~3 cm) at lr 1e-3 / 3e-4 and with sensor IDs, the old transformer at 3e-4, flat GRU at 1e-3 / 3e-3, somato_pool as anchor. Then the full-pose transformer on terrain (E-2 settings, 10 % / 100 %) to see whether E-2's transformer was handicapped | `configs/experiments/v1_e22_slide_fairness.yaml`, `v1_e22_terrain_fullpose.yaml` | ~1.7 h | queued in jobq after E-9 |
+| 1 | E-22 | Baseline fairness on the slide test (user, 2026-10-11) | Code check: flat GRU gets every body's pose (complete); transformer lacked the along-link axis and fine position encoding. Slide proxy at 840 episodes, seed 0: `transformer_fullpose` (position + x and z axes, Fourier bands to ~3 cm) at lr 1e-3 / 3e-4 and with sensor IDs, the old transformer at 3e-4, flat GRU at 1e-3 / 3e-3, somato_pool as anchor. Then the full-pose transformer on terrain (E-2 settings, 10 % / 100 %) to see whether E-2's transformer was handicapped | `configs/experiments/v1_e22_slide_fairness.yaml`, `v1_e22_terrain_fullpose.yaml` | ~1.7 h | **running** (jobq from 11:30) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -72,6 +71,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-9, held-out friction range (F-29); a compliance holdout is a possible follow-up.
 * E-1b, training budget (F-28).
 * E-13b, slide proxy with 3 seeds (F-27).
 * E-21, sensor-model randomization (F-26).

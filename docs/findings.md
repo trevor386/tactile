@@ -13,6 +13,50 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-29. E-9, held-out friction range: every model degrades about equally (−20 points in classification, 2× friction
+error); structure keeps its absolute lead but does not extrapolate better.** *Why:* H-2b (terrain outside the
+training range) and H-11 (property estimates under extrapolation). *Setup:*
+* `configs/experiments/v1_e9_holdout.yaml`: within each class the 30 % highest-friction episodes are held out of
+  training, validation and test (`holdout` option) and evaluated separately. The held-out ranges are glare ice
+  0.73–1.00, rough ice 0.58–0.80, packed snow 0.48–0.60, fresh snow 0.33–0.40 and concrete 0.88–1.00; overall training
+  friction ends at 0.88.
+* E-5 tasks (classification + friction and sinkage), models and learning rates; 1,176 training episodes; 3 seeds.
+
+*Result (mean ± std over seeds):*
+
+| model | acc in range | acc held out | friction MAE in range → held out | sinkage MAE in range → held out |
+|---|---|---|---|---|
+| somato_pool | **0.828 ± 0.003** | **0.625 ± 0.002** | 0.055 → 0.118 | **0.31 → 0.31 mm** |
+| receptor_only | 0.815 ± 0.006 | 0.610 ± 0.006 | 0.060 → 0.127 | 0.40 → 0.41 |
+| transformer | 0.758 ± 0.014 | 0.568 ± 0.017 | 0.058 → 0.115 | 0.37 → 0.36 |
+| flat_gru | 0.744 ± 0.005 | 0.532 ± 0.002 | 0.055 → **0.114** | 0.32 → 0.32 |
+
+*Evidence:*
+* Classification falls by 19–21 points for every model on the unseen top of each class's friction range. The structured
+  models stay ahead in absolute terms (+5.7 points over the transformer, +9.3 over flat; in range +7.0 / +8.4).
+* Friction error doubles for every model (0.055–0.060 → 0.114–0.127). The baselines are marginally best, as on the E-7
+  terrains (F-25). The held-out error is above E-5's in-distribution error at similar friction (0.07–0.10), so this is
+  extrapolation error, not only range-edge shrinkage.
+* Sinkage error is unchanged (the held-out episodes differ in friction, not compliance). somato_pool and flat_gru are
+  best on it.
+* In-range accuracy is higher than in E-5 (0.828 vs 0.793) despite 30 % fewer episodes: without the high-friction tail,
+  glare ice overlaps less with concrete.
+
+*Caveats:*
+* One holdout axis (friction).
+* The held-out episodes are the extreme of each class, so classification also suffers from class overlap (e.g.
+  high-friction glare ice looks like concrete).
+* No per-episode bias analysis (no checkpoints saved).
+
+*Implication:*
+* H-2b, friction extrapolation: the structured models generalize *as well as*, not better than, the baselines. Their
+  in-distribution advantage carries over to unseen parameter ranges, but the degradation is no smaller.
+* H-11: friction estimation extrapolates poorly for every architecture (2× error), consistent with F-25. Physical
+  friction beyond the trained range is not something any of these models infers.
+* Possible follow-ups:
+  * a compliance holdout (does sinkage extrapolate?);
+  * whether randomized-sensor training (F-26) or SSL (E-14) changes extrapolation.
+
 **F-28. E-1b, training budget: protocol v4 under-trains at 25 % data (2–5 points), is nearly adequate at full data;
 the model ranking is unchanged.** *Why:* H-12; in E-2 most best checkpoints were near the end of training (F-22).
 *Setup:*
