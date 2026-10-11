@@ -1,0 +1,21 @@
+# E-10 layout generalization: snake_3d.yaml with twice the taxel density (4 rings x 12 per link, 768 taxels instead of
+# 3 x 8 = 384). Same body and joints, so only the skin layout differs. Test data only.
+robot:
+  type: snake
+  params:
+    num_links: 16
+    link_length: 0.10
+    radius: 0.025
+    link_mass: 0.25
+    joint_axes: [z, y]
+    joint_effort: 6.0
+sensors:
+  tactile:
+    placements:
+      - {generator: cylinder, bodies: "link_\\d+", n_rings: 4, n_per_ring: 12, skin: 0.002}
+  joint:
+    placements:
+      - {generator: joints}
+  imu:
+    placements:
+      - {generator: point, body: link_0, pos: [0.05, 0.0, 0.0], name: imu}

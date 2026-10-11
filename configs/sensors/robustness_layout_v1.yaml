@@ -1,0 +1,11 @@
+# E-10 layout robustness suite (scripts/analysis/robustness.py): contiguous skin loss on the training layout (whole links
+# dead, e.g. a failed connector or a torn skin segment) next to random dead taxels as a reference. All models can be
+# evaluated on it (dead taxels read 0 / are masked). On other layouts (--episodes all with
+# datasets/mjlab_v1_dense_400 or mjlab_v1_links12_400) only "nominal" is meaningful, for the structured models.
+base: configs/sensors/fsr_v1.yaml
+perturbations:
+  nominal: {}
+  dead_1link: {augment: {eval_dead_links: 1}}
+  dead_2links: {augment: {eval_dead_links: 2}}
+  dead_4links: {augment: {eval_dead_links: 4}}
+  dead_25pct_random: {augment: {eval_sensor_dropout: 0.25}}    # as many dead taxels as 4 of 16 links, scattered

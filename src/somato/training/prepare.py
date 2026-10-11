@@ -21,6 +21,9 @@ class AugmentConfig:
     dropout_groups: list[str] = field(default_factory=lambda: ["tactile"])
     # Dead sensors also at evaluation (robustness tests: a damaged skin); 0 = all sensors work when not training.
     eval_sensor_dropout: float = 0.0
+    # Evaluation only: the whole skin of this many random links is dead per sample (contiguous loss, e.g. a failed
+    # connector; E-10), on top of ``eval_sensor_dropout``.
+    eval_dead_links: int = 0
 
 
 class BatchPreparer:
@@ -66,6 +69,14 @@ class BatchPreparer:
                 if g in self.info.slices:
                     sl = self.info.slices[g]
                     node_mask[:, sl] = torch.rand(B, sl.stop - sl.start, device=self.device) >= dropout
+        if not train and aug.eval_dead_links > 0 and "tactile" in self.info.slices:
+            if node_mask is None:
+                node_mask = torch.ones(B, self.info.num_nodes, dtype=torch.bool, device=self.device)
+            sl = self.info.slices["tactile"]
+            body = self.info.body_index[sl].to(self.device)  # link of every taxel
+            links = body.unique()
+            dead = links[torch.rand(B, len(links), device=self.device).argsort(-1)[:, :aug.eval_dead_links]]  # [B, k]
+            node_mask[:, sl] &= ~(body[None, :, None] == dead[:, None, :]).any(-1)
         labels = {k[6:]: v for k, v in sample.items() if k.startswith("label/")}
         labels.update({k: v for k, v in sample.items() if k.startswith("param/")})
         return SomatoBatch(readings, pos, rot, self.info, node_mask, labels)

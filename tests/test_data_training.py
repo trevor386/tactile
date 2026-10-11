@@ -122,6 +122,13 @@ def test_batch_preparer_augmentation(store):
     assert torch.allclose(d_plain, d_aug, atol=1e-4) and not torch.allclose(plain.pos, aug.pos)
     tac = info.slices["tactile"]
     assert aug.node_mask is not None and not aug.node_mask[:, tac].all() and aug.node_mask[:, tac.stop:].all()
+    # Evaluation with dead links: every taxel of exactly k links is dead, nothing else.
+    dead = BatchPreparer(store.layout, info, suite, "cpu", AugmentConfig(eval_dead_links=2))(sample, train=False)
+    body = info.body_index[tac]
+    for b in range(2):
+        off = body[~dead.node_mask[b, tac]].unique()
+        assert len(off) == 2 and (~dead.node_mask[b, tac]).sum() == sum(int((body == x).sum()) for x in off)
+    assert dead.node_mask[:, tac.stop:].all()
 
 
 def test_run_experiment_and_reload(tmp_path, dataset_dir, store):

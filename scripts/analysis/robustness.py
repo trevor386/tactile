@@ -35,6 +35,8 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--out", default=None)
+    p.add_argument("--episodes", default="test", choices=["test", "all"],
+                   help="all: every episode (a dataset no model was trained on, e.g. another sensor layout)")
     args = p.parse_args()
 
     paths = sorted(glob.glob(args.runs))
@@ -64,7 +66,8 @@ def main():
         cfg.train.batch_size = args.batch_size
         key = (tuple(cfg.split), cfg.split_seed, cfg.window, cfg.eval_stride)
         if key not in datasets:
-            test_ids = stratified_split(labels, tuple(cfg.split), cfg.split_seed)[2]
+            test_ids = (torch.arange(len(store)) if args.episodes == "all"
+                        else stratified_split(labels, tuple(cfg.split), cfg.split_seed)[2])
             datasets[key] = WindowDataset(store, test_ids, cfg.window, cfg.eval_stride)
         ds = datasets[key]
         tasks = build_tasks(cfg.tasks)
