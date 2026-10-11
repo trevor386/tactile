@@ -13,6 +13,62 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-30. E-22, baseline fairness on the slide test: with the full sensor pose and a suitable learning rate, the
+baselines fit the training set perfectly but still do not generalize (flat GRU 0.57, transformer at chance); the
+structured model's advantage comes from the architecture, not from having the poses.** *Why:* the user questioned
+F-27's near-chance baselines (2026-10-11). Do the baselines receive the sensor poses, so that the benefit is from
+building the poses into the architecture rather than from having them?
+*Setup:*
+* Code check of the inputs:
+  * structured stage 2: each neighbour's offset in the sensor's own frame, whose x axis runs along the link;
+  * flat GRU: every body's pose in the robot frame plus taxel identity by input position, so complete;
+  * E-13b transformer: position with a coarse Fourier encoding (finest wavelength 12.5 cm vs 2–3 cm taxel spacing) and
+    the normal, but not the along-link axis.
+* New option `kin_axes: full` (`configs/models/transformer_fullpose.yaml`): position, x axis and normal, Fourier bands
+  down to ~3 cm.
+* `configs/experiments/v1_e22_slide_fairness.yaml`: 840 episodes, seed 0, widths matched, protocol v4.
+* `v1_e22_terrain_fullpose.yaml`: the full-pose transformer on terrain with E-2's settings.
+
+*Result, slide proxy (test acc, chance 0.25; final training loss):*
+
+| model | test acc | training loss at the end |
+|---|---|---|
+| somato_pool | **0.976** | — |
+| flat_gru, lr 1e-3 (E-13b: lr 3e-4, 0.30) | 0.568 | 0.006 |
+| flat_gru, lr 3e-3 | 0.525 | — |
+| transformer (E-13b inputs), lr 3e-4 | 0.260 | 0.000 |
+| transformer, full pose, lr 1e-3 / 3e-4 | 0.281 / 0.256 | 0.003 |
+| transformer, full pose + learned sensor IDs | 0.271 | 0.000 |
+
+*Result, terrain (seed 0; E-2 transformer in brackets):* full-pose transformer 0.492 (0.517) at 10 %, 0.680 (0.741) at
+100 %.
+
+*Evidence:*
+* Every baseline fits its 840 training episodes almost perfectly, so information and capacity are not the limit. The
+  transformers then memorize: validation stays at chance while validation loss climbs to 6–7. The flat GRU memorizes
+  too, but partly generalizes (validation 0.58).
+* Giving the transformer exactly the pose information the structured kernel uses, even plus absolute sensor identity,
+  does not help.
+* The flat GRU's E-13b result was handicapped by its terrain-tuned learning rate (0.30 → 0.57; E-13 also found 0.54 at
+  lr 1e-3).
+* Within the structured family, building the poses in is worth +0.58: stage 1 with pooling and no poses scores
+  0.35–0.40 (F-27), plus the local-frame kernel 0.96–0.98.
+* On terrain the full-pose transformer is worse than E-2's (−6 points at full data, beyond E-2's seed std of 0.008),
+  plausibly because fine position features invite overfitting. E-2's transformer was not handicapped.
+
+*Caveats:*
+* One seed per variant. The flat GRU's 0.57 is supported by two independent runs (E-13, E-22).
+* Protocol v4.
+* More data might eventually teach the transformer the rule; that is the data-efficiency question itself.
+
+*Implication:*
+* The user's criterion holds: the baselines have the poses and the capacity, and the generalizing solution comes from
+  the architecture (a shared, local operator in each sensor's frame). The corrected slide gap is 0.976 vs 0.57 (flat)
+  and chance (transformer).
+* Keep `transformer.yaml` as the terrain baseline. Use the full-pose transformer whenever a task needs local
+  orientation, and report both.
+* Learning rates must be checked per task, not carried over from terrain: F-27's flat GRU number was too low.
+
 **F-29. E-9, held-out friction range: every model degrades about equally (−20 points in classification, 2× friction
 error); structure keeps its absolute lead but does not extrapolate better.** *Why:* H-2b (terrain outside the
 training range) and H-11 (property estimates under extrapolation). *Setup:*
@@ -119,6 +175,8 @@ the model ranking is unchanged.** *Why:* H-12; in E-2 most best checkpoints were
 * A synthetic stimulus-level proxy.
 * The baselines' learning rates were tuned on terrain. In E-13 the flat GRU at lr 1e-3 (one seed) reached 0.54 at 840
   episodes, so its number here is lr-sensitive, but far below 0.97 either way.
+* **Update (F-30):** with lr 1e-3 the flat GRU reaches 0.57. The E-13b transformer lacked the along-link sensor axis,
+  but with the full pose (and even sensor IDs) it stays at chance. The corrected gap is 0.976 vs 0.57 / chance.
 
 *Implication:*
 * H-9 is supported with seeds. This is the clearest case so far of structure enabling something the unstructured

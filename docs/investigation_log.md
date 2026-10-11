@@ -9,21 +9,15 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 11:45)
+## RESUME HERE (state as of 2026-10-11 13:30)
 
-* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29).
-* **Running in jobq, in order:** `e22_slide_fairness` (from 11:30, ~1.2 h) → `e22_terrain_fullpose` (~0.5 h). Write
-  F-30 (E-22). Check with `python3 tools/jobq.py status`; after
-  a reboot run `start`.
+* **Nothing running.** Done recently: E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22
+  (F-30, the user's fairness question: the baselines have the poses and fit the training set, but do not generalize;
+  `transformer.yaml` stays the terrain baseline, the full-pose variant is reported where local orientation matters).
 * **New defaults (user, 2026-10-11):** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR,
-  protocol v5 = max(6,000 steps, 15 epochs)).
-* **Open fairness question (user, 2026-10-11):** do the baselines get the sensor poses on the slide test? Code check:
-  the flat GRU does (every body's pose, taxel identity by input index); the transformer got positions (coarse Fourier
-  encoding, finest wavelength 12.5 cm vs 2–3 cm taxel spacing) and normals but not the along-link axis that the
-  structured kernel uses. E-22 tests a full-pose transformer and baseline learning rates. If it changes F-27 or E-2's
-  transformer results, the transformer baseline becomes `transformer_fullpose` and the affected comparisons are rerun.
-* **Next after E-22:** E-12 (sensor technology) or E-10 (layout generalization) on `terrain_v1b`; T-19 (stage 3) is
-  the open research task.
+  protocol v5 = max(6,000 steps, 15 epochs)). Check baseline learning rates on each new task (F-30).
+* **Next (awaiting the user's steer):** E-12 (sensor technology) or E-10 (layout generalization) on `terrain_v1b`;
+  T-19 (stage 3) is the open research task.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -45,7 +39,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-6 | The continuous 3D kernel beats feature-dependent graph message passing. | weakly supported (F-18, one seed) |
 | H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
-| H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without, baselines near chance) |
+| H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without; F-30, fair baselines with full poses and tuned lr: flat GRU 0.57, transformer at chance, both fit the training set) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25, F-29: friction error doubles beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
@@ -59,7 +53,6 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-22 | Baseline fairness on the slide test (user, 2026-10-11) | Code check: flat GRU gets every body's pose (complete); transformer lacked the along-link axis and fine position encoding. Slide proxy at 840 episodes, seed 0: `transformer_fullpose` (position + x and z axes, Fourier bands to ~3 cm) at lr 1e-3 / 3e-4 and with sensor IDs, the old transformer at 3e-4, flat GRU at 1e-3 / 3e-3, somato_pool as anchor. Then the full-pose transformer on terrain (E-2 settings, 10 % / 100 %) to see whether E-2's transformer was handicapped | `configs/experiments/v1_e22_slide_fairness.yaml`, `v1_e22_terrain_fullpose.yaml` | ~1.7 h | **running** (jobq from 11:30) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -71,6 +64,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-22, baseline fairness on the slide test (F-30).
 * E-9, held-out friction range (F-29); a compliance holdout is a possible follow-up.
 * E-1b, training budget (F-28).
 * E-13b, slide proxy with 3 seeds (F-27).
