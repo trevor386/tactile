@@ -32,7 +32,8 @@ with the **RESUME HERE** section of `docs/investigation_log.md`.
   * `ood_eval.py`: unseen terrains;
   * `task_ceiling.py`: Bayes ceilings;
   * `profile_step.py`: training speed;
-  * `runtime.py`: online latency per output (batch 1, GPU/CPU, window/stream) and FLOPs.
+  * `runtime.py`: online latency per output (batch 1, GPU/CPU, window/stream) and FLOPs;
+  * `streaming_eval.py`: accuracy vs time since reset with the recurrent state carried (streaming deployment).
 * Simulator changes: `python scripts/mjlab/validate_mjlab.py --num_envs 10` must pass. Never loosen a threshold
   without the user's approval.
 
