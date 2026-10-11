@@ -13,6 +13,41 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-27. E-13b, slide proxy with 3 seeds: the spatial stage decides it; nothing without it gets far beyond chance.**
+*Why:* confirm F-17 (H-9; one seed) with the E-2 models and learning rates. *Setup:*
+* `configs/experiments/v1_e13b_slide.yaml`: 4 slide directions (chance 0.25);
+* 84 / 840 training episodes, 3 seeds;
+* widths matched, fixed FSR v1;
+* learning rates as in E-2, tuned on terrain, not on this task.
+
+*Result (test acc, mean ± std over seeds):*
+
+| model | 84 eps | 840 eps |
+|---|---|---|
+| somato_pool (stage 1 + 3D kernel + pooling) | **0.958 ± 0.009** | **0.974 ± 0.010** |
+| receptor_only (stage 1 + pooling) | 0.345 ± 0.096 | 0.395 ± 0.101 |
+| flat_gru | 0.285 ± 0.019 | 0.295 ± 0.025 |
+| transformer | 0.285 ± 0.021 | 0.273 ± 0.012 |
+
+*Evidence:*
+* somato_pool solves the task from 84 episodes in every seed (≥ 0.945).
+* The only difference between somato_pool and receptor_only is the spatial stage, and removing it drops accuracy to
+  0.35–0.40, with large seed variation. Reading motion needs interaction between neighbouring taxels' temporal
+  features.
+* Both baselines see the same raw data and kinematics and stay within 5 points of chance, even with 10× the data.
+
+*Caveats:*
+* A synthetic stimulus-level proxy.
+* The baselines' learning rates were tuned on terrain. In E-13 the flat GRU at lr 1e-3 (one seed) reached 0.54 at 840
+  episodes, so its number here is lr-sensitive, but far below 0.97 either way.
+
+*Implication:*
+* H-9 is supported with seeds. This is the clearest case so far of structure enabling something the unstructured
+  models do not learn at these data sizes.
+* It complements F-22, where on terrain most of the advantage came from stage 1: which stage matters depends on
+  whether the information is in single-taxel dynamics (terrain) or in how patterns move across the skin (slip,
+  sliding contacts). A locomotion controller needs both.
+
 **F-26. E-21, sensor-model randomization removes the hysteresis shortcut at almost no cost, and widens the structured
 lead under sensor shift.** *Why:* F-23 found that every model reading raw sensor dynamics had learned the simulated
 FSR hysteresis (H-2a, H-3). *Setup:*

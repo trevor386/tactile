@@ -9,12 +9,11 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 01:00)
+## RESUME HERE (state as of 2026-10-11 04:30)
 
-* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26).
-* **Running in jobq, in order** (~10 h from 00:40): `e13b_slide` (`runs/v1/e13b_slide`) → `e1b_budget`
-  (`runs/v1/e1b_budget`) → `e9_holdout` (`runs/v1/e9_holdout`). Analyse each as it finishes and write its finding
-  (F-27 onwards). Check with `python3 tools/jobq.py status`; after a reboot run `start`.
+* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27).
+* **Running in jobq, in order** (~7 h from 04:14): `e1b_budget` (`runs/v1/e1b_budget`) → `e9_holdout`
+  (`runs/v1/e9_holdout`). Analyse each as it finishes and write its finding (F-28 onwards). Check with `python3 tools/jobq.py status`; after a reboot run `start`.
 * **Next after the queue:** E-12 (sensor technology) or E-10 (layout generalization), trained on `fsr_v1_random`
   (proposed default, F-26); T-19 (stage 3) is the open research task.
 
@@ -38,7 +37,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-6 | The continuous 3D kernel beats feature-dependent graph message passing. | weakly supported (F-18, one seed) |
 | H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
-| H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | supported (F-17, one seed; E-13b to confirm) |
+| H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without, baselines near chance) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25). E-9 next. |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | open: in E-2 most full-data best steps were late (F-22) (E-1b) |
@@ -52,9 +51,8 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-13b | Slide proxy with the E-2 models (H-9, 3 seeds) | somato_pool, receptor_only, flat_gru, transformer at 84 and 840 episodes | `configs/experiments/v1_e13b_slide.yaml` | ~3 h | **running** (jobq `e13b_slide` from 00:40) |
-| 2 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | queued in jobq (`e1b_budget`) |
-| 3 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9_holdout`) |
+| 1 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | **running** (jobq `e1b_budget` from 04:14) |
+| 2 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9_holdout`) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -66,6 +64,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-13b, slide proxy with 3 seeds (F-27).
 * E-21, sensor-model randomization (F-26).
 * E-5, property estimation, with T-21 on the OOD set (F-25).
 * E-6, sensor robustness (F-23).
