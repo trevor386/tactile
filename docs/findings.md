@@ -13,6 +13,64 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-31. Runtime (T-23): on this GPU every model runs well inside the 20 ms budget; on a CPU only the flat GRU (window
+mode) and the recurrent models in streaming mode do. At matched parameters the flat GRU is 7–19× cheaper than
+somato_pool, so it has room to grow (E-23). The simulator runs at 0.34× real time for one robot.** *Why:* the user
+(2026-10-11): the models will run online on a robot. How fast is each, at what rate, is the sim real-time, and should
+models be matched by online cost instead of parameters? *Setup:*
+* `scripts/analysis/runtime.py`: batch 1, sensor-model simulation excluded (a robot reads real sensors), median of 100
+  repetitions;
+* trained E-2 models (`runs/v1/runtime_e2.csv`) and width sweeps (`runs/v1/runtime_sweep.csv`);
+* RTX 3060 Ti (fp32 and bf16) and CPU with 4 threads (16-core desktop);
+* FLOPs per window from the PyTorch FLOP counter (fused attention disabled for counting) plus an analytic GRU count.
+* Two online modes:
+  * *window*: re-run the trained 0.5 s window at every 20 ms step from a fresh state. This is the training regime and
+    the only option for the transformer.
+  * *stream*: one new step with the carried state, for recurrent models. Its accuracy beyond the window is untested
+    (E-18).
+
+*Result (E-2 widths, ~430k parameters; ms per output):*
+
+| model | GFLOP / window | GPU fp32 window | GPU bf16 window | CPU window | CPU stream mean / p95 |
+|---|---|---|---|---|---|
+| somato_pool (dim 64) | 1.8 | 4.1 | 5.5 | 34 | 2.7 / 7.7 |
+| receptor_only (104) | 1.5 | 2.1 | 3.3 | 28 | 1.6 / 2.3 |
+| flat_gru (156) | 0.02 | **0.6** | 0.9 | **1.8** | 0.4 / 0.4 |
+| transformer (108) | 8.5 | 5.3 | 2.4 | **129** | — |
+
+Width sweeps:
+* The structured models' latency hardly depends on width (somato dim 64 → 96: 4.1 → 4.1 ms GPU; receptor 104 → 208:
+  2.1 → 2.2 ms). Their cost is stage 1 running over 384 taxels × 250 samples.
+* The flat GRU reaches somato_pool's latency at width ~2,048 on the GPU (window 4.0 ms, 36.6 M parameters), ~1,750 on
+  the CPU window and ~1,300 in CPU streaming.
+* The transformer's floor is set by attention over ~1,940 tokens: 4.5 ms GPU and 118 ms CPU even at dim 64.
+
+Output rates:
+* All models can emit one estimate per latent step (50 Hz) in window mode.
+* In streaming mode the hierarchical models emit at 10 Hz (`brain_stride` 5); the flat GRU emits at 50 Hz.
+* Sensors are simulated at 500 Hz (touch) and 250 Hz (joints, IMU).
+
+Simulator: mjlab with the full stimulus pipeline (`collect_mjlab.py`) needs 11.7 s of wall time per 4 s of simulated
+time with one environment, i.e. 0.34× real time. With 400 environments it reaches 40× real time in aggregate (0.1× per
+environment).
+
+*Evidence:* the numbers above.
+
+*Caveats:*
+* One machine. A robot's computer (e.g. Jetson-class GPU or ARM CPU) will be slower, and batch-1 GPU latency here is
+  dominated by kernel-launch overhead, not FLOPs.
+* No optimization (TorchScript, TensorRT, fp16 export).
+* The somato streaming mode needs E-18 before it can be relied on.
+
+*Implication:*
+* Not a blocker on a GPU. On a CPU, window-mode somato_pool (34 ms) and especially the transformer (129 ms) miss
+  50 Hz. Streaming fixes it for somato_pool (2.7 ms mean) once validated (E-18); the transformer would need fewer
+  tokens. Noted, not pursued now (user).
+* The sim is not real time for a single robot (MuJoCo-Warp is built for many parallel environments). Hardware-in-the-
+  loop or online demos would need CPU MuJoCo or a faster single-env path. Noted.
+* Cost matching: the transformer is already within 1.3× of somato_pool on the GPU (slower on the CPU) and receptor_only
+  within 2×. The flat GRU has 7–19× headroom, so E-23 tests it at widths 512–2,048.
+
 **F-30. E-22, baseline fairness on the slide test: with the full sensor pose and a suitable learning rate, the
 baselines fit the training set perfectly but still do not generalize (flat GRU 0.57, transformer at chance); the
 structured model's advantage comes from the architecture, not from having the poses.** *Why:* the user questioned

@@ -9,15 +9,17 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 13:30)
+## RESUME HERE (state as of 2026-10-11 15:00)
 
-* **Nothing running.** Done recently: E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22
-  (F-30, the user's fairness question: the baselines have the poses and fit the training set, but do not generalize;
-  `transformer.yaml` stays the terrain baseline, the full-pose variant is reported where local orientation matters).
-* **New defaults (user, 2026-10-11):** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR,
-  protocol v5 = max(6,000 steps, 15 epochs)). Check baseline learning rates on each new task (F-30).
-* **Next (awaiting the user's steer):** E-12 (sensor technology) or E-10 (layout generalization) on `terrain_v1b`;
-  T-19 (stage 3) is the open research task.
+* **Running:** E-23 (compute-matched flat GRU, jobq `e23_compute_matched`, ~1.5 h from 14:50). Then F-32.
+* **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
+  runtime (F-31).
+* **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
+  locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
+  pursued.
+* **New defaults:** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR, protocol v5 =
+  max(6,000 steps, 15 epochs)). Check baseline learning rates on each new task (F-30).
+* **Next:** E-10 (layout generalization), then E-12 (sensor technology), on `terrain_v1b`.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -54,6 +56,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
+| 1 | E-23 | Compute-matched baselines (user, 2026-10-11) | Match by online cost instead of parameters: the flat GRU has 7–19× latency headroom at matched parameters (F-31), so widths 512 / 1,024 / 2,048 (2,048 ≈ somato_pool's GPU window latency) at lr 3e-4 / 1e-4, 10 % / 100 %, seed 0, E-2 settings; seeds and the full curve if it changes the picture. The transformer is already within 1.3× on the GPU (slower on the CPU), so it is not scaled | `configs/experiments/v1_e23_compute_matched.yaml` | ~1.5 h | **running** (jobq from 14:50) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
@@ -93,6 +96,7 @@ very long runs until earlier steps are sound.
 | T-15 | Literature review of the somatosensory system (SA/RA receptors, dorsal-column pathways, somatotopy, cortical integration) for architecture ideas. | E-17 | queued |
 | T-17 | TBPTT failure with 6 chunks per sequence (from v0): test 3 and 4 chunks, more distinct sequences per epoch. | E-18 | queued |
 | T-18 | Disk hygiene: delete v0 datasets and caches, and `datasets/mjlab_terrain_600_dc/cache_v1` (4 GB), when no experiment needs them. | — | queued |
+| T-23 | Runtime measurement per model (latency per output at batch 1, GPU and CPU, window and stream modes, FLOPs) and simulator real-time factor: `scripts/analysis/runtime.py`. | E-23 | done (2026-10-11, F-31) |
 | T-19 | Stage-3 research: a dynamic, geometry-aware, temporal stage 3 that trains reliably. The v1 brain stalls or memorizes on sparse moving stimuli (F-17, F-19, F-20). Ideas: initialize as the pool head (gated residual, gate at 0); tokens without LayerNorm; gradient diagnosis at initialization; Perceiver-style latents. Long term stage 3 feeds a locomotion controller. | H-8 | queued |
 | T-20 | Europa OOD set (catalog `ood_europa_v1.yaml`, config `collect_mjlab_europa.yaml`, gravity option): motivation only, not in the near-term queue (user, 2026-10-08). | — | parked |
 
@@ -119,7 +123,14 @@ Done tasks are in the commits and in `docs/findings.md`:
   * v0 datasets: ~10 GB;
   * runs under `runs/v1/` (checkpoints in `main_curves`).
 * **Main-study models and learning rates** (E-2): somato_pool 1e-3, receptor_only 1e-3, transformer 1e-3, flat_gru 3e-4;
-  widths matched to somato_pool (~428k). Compute per step is not matched (the user accepts that).
+  widths matched to somato_pool (~428k). Compute per step is not matched; the user asked (2026-10-11) for matching by
+  online cost too, so E-23 tests it.
+* **Real-time concerns, noted, not pursued now** (user, 2026-10-11; F-31):
+  * on a CPU, window-mode somato_pool (34 ms) and the transformer (129 ms) miss the 20 ms budget; streaming somato
+    (2.7 ms) would fit once E-18 validates it;
+  * the robot's actual compute is unknown;
+  * the simulator runs at 0.34× real time for one robot (an online demo or hardware-in-the-loop would need a faster
+    single-env path).
 * **The baselines are tied to one sensor layout**: layout transfer (E-10) runs for the structured models only; report it
   as a capability.
 * **Open questions for the user:** none.
@@ -142,3 +153,4 @@ Done tasks are in the commits and in `docs/findings.md`:
 | 2026-10-10 | E-21's randomization ranges contain the nominal sensor and "no hysteresis" but stop short of most E-6 perturbations. | Tests both interpolation (the F-23 failure) and extrapolation beyond the trained range. |
 | 2026-10-11 | New studies train on `configs/sensors/fsr_v1_random.yaml` (approved by the user). E-13b, E-1b, E-9 and E-22 stay on fixed fsr_v1 to compare with E-13, E-2 and E-5. Ranges to be refit from bench data when the real skin exists. | F-26: removes the hysteresis shortcut, −0.8 points nominal for the structured models, +4–7 points under the combined shift. |
 | 2026-10-11 | Protocol v5 = max(6,000 steps, 15 epochs), in the new base `configs/experiments/terrain_v1b.yaml`. The user asked for a balance instead of the proposed 2× budget (30 epochs). v4 results stand and are not re-run unless a conclusion depends on absolute accuracy. | F-28: the large under-training (2–5 points) is at intermediate data, where runs are cheap. Full-data runs (most of the compute) gain ≤ 2 points with the ranking unchanged. Cost: about +25 % for a 10 % / 100 % study, +45 % for a four-point curve, 0 % for full-data-only studies. Remaining caveat: full-data accuracies may be ~1–2 points low, the transformer's most (+1.9 at 2×). |
+| 2026-10-11 | Focus on stages 1–2 and their capabilities; stage 3 (T-19) and locomotion wait. Real-time feasibility is tracked (F-31) but not optimized now. Baselines are also compared at matched online cost where a gap is large (E-23). | User direction, 2026-10-11. |

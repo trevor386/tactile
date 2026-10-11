@@ -1,0 +1,29 @@
+# E-23 (runtime matching, user 2026-10-11): matched by online cost instead of parameters, does the flat GRU close the
+# gap? At E-2's matched parameters (~430k) the flat GRU runs a window in 0.6 ms (GPU) / 1.8 ms (CPU, 4 threads) vs
+# somato_pool's 4.1 / 34 ms (runs/v1/runtime_sweep.csv). Widths 1024-2048 match somato_pool's latency (GPU window
+# 2048 ≈ 4.0 ms; CPU window ~1,750; CPU stream ~1,300). Sweep width and learning rate (bigger models usually need a
+# lower one) at E-2's settings (protocol v4, fixed FSR v1), seed 0, against E-2's flat GRU (width 156) and
+# somato_pool.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e23_compute_matched.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/e23_compute_matched
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: false
+save_checkpoints: false
+models:
+  flat_w512_lr3e-4:
+    model: {architecture: flat_recurrent, hidden: 512, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}
+  flat_w1024_lr3e-4:
+    model: {architecture: flat_recurrent, hidden: 1024, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}
+  flat_w1024_lr1e-4:
+    model: {architecture: flat_recurrent, hidden: 1024, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0001}
+  flat_w2048_lr3e-4:
+    model: {architecture: flat_recurrent, hidden: 2048, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}
+  flat_w2048_lr1e-4:
+    model: {architecture: flat_recurrent, hidden: 2048, chunk_features: stats, kinematics: true, heads: {terrain: {type: global}}}
+    train: {lr: 0.0001}
