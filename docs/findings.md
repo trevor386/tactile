@@ -13,6 +13,46 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-33. E-23, compute matching: given somato_pool's online compute (a 13× wider, 37M-parameter flat GRU), the flat
+baseline gains ~2 points and stays 5–7 points behind; the ranking is unchanged.** *Why:* the user (2026-10-11) asked to
+match models by online cost, since that matters for deployment. At matched parameters the flat GRU is 7–19× cheaper per
+output than somato_pool (F-31); the transformer and receptor_only are within 1.3–2× (on the GPU), so only the flat GRU
+had headroom worth testing. *Setup:*
+* `configs/experiments/v1_e23_compute_matched.yaml` (widths 512 / 1,024 / 2,048 at lr 3e-4 / 1e-4, seed 0) and
+  `v1_e23_seeds.yaml` (the two lr-1e-4 models, seeds 1–2);
+* E-2 settings (protocol v4, fixed FSR v1), so E-2 is the comparison.
+* Width 2,048 runs a window in 4.0 ms on the GPU, the same as somato_pool's 4.1 ms; on the CPU the matched width is
+  ~1,300–1,750, between the two tested sizes.
+
+*Result (test acc, mean ± std over 3 seeds):*
+
+| model | params | GPU ms / window | 170 episodes | 1,680 episodes |
+|---|---|---|---|---|
+| flat_gru, E-2 (width 156, lr 3e-4) | 0.43 M | 0.6 | 0.531 ± 0.013 | 0.684 ± 0.008 |
+| flat_gru, width 1,024, lr 1e-4 | 9.9 M | 1.5 | 0.544 ± 0.011 | **0.708 ± 0.004** |
+| flat_gru, width 2,048, lr 1e-4 (latency-matched) | 36.6 M | 4.0 | **0.553 ± 0.005** | 0.706 ± 0.008 |
+| transformer, E-2 | 0.44 M | 5.3 | 0.548 ± 0.022 | 0.734 ± 0.008 |
+| somato_pool, E-2 | 0.43 M | 4.1 | 0.606 ± 0.016 | 0.778 ± 0.004 |
+
+At lr 3e-4 the wide models were worse (0.497–0.509 / 0.659–0.675, seed 0) and over-confident (test NLL up to 3.9).
+
+*Evidence:*
+* Matching compute instead of parameters closes about a quarter of the flat GRU's gap: 7.5 → 5.3 points at 10 %,
+  9.4 → 7.2 at full data. The remaining gap is > 3 seed stds at both sizes.
+* The wide flat GRU reaches the transformer at 10 % (0.553 vs 0.548) but not at full data (0.706 vs 0.734).
+* Going from width 1,024 to 2,048 adds nothing at full data: capacity is not the flat GRU's bottleneck.
+
+*Caveats:*
+* lr 1e-4 was not tried at width 156, so part of the gain may come from the learning rate rather than the width.
+* Protocol v4 (F-28: up to 2–5 points of under-training at intermediate data, similar across models).
+* Latency matching uses this GPU; on a CPU the matched width is somewhat smaller.
+
+*Implication:*
+* The structured models' advantage is not an artifact of matching parameters instead of compute. With the same
+  online budget, the extra capacity does not substitute for the inductive bias.
+* No further compute-matching work is needed for the flat GRU. The transformer is already at similar (GPU) or higher
+  (CPU) cost than somato_pool, so it cannot gain from matching.
+
 **F-32. E-10, layout generalization: the structured models shrug off contiguous skin loss and transfer zero-shot to a
 denser skin (−1 point) and a shorter robot (−4.5 points); the baselines lose 4–6 points to dead links and cannot run on
 another layout at all.** *Why:* H-2d. A deployed skin loses whole segments (connectors, tears), and the same encoder
