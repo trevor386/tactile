@@ -9,13 +9,15 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 04:30)
+## RESUME HERE (state as of 2026-10-11 08:30)
 
-* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27).
-* **Running in jobq, in order** (~7 h from 04:14): `e1b_budget` (`runs/v1/e1b_budget`) → `e9_holdout`
-  (`runs/v1/e9_holdout`). Analyse each as it finishes and write its finding (F-28 onwards). Check with `python3 tools/jobq.py status`; after a reboot run `start`.
-* **Next after the queue:** E-12 (sensor technology) or E-10 (layout generalization), trained on `fsr_v1_random`
-  (proposed default, F-26); T-19 (stage 3) is the open research task.
+* **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28).
+* **Running in jobq:** `e9_holdout` (E-9, `runs/v1/e9_holdout`, ~3 h from 08:20). Analyse and write F-29. Check with
+  `python3 tools/jobq.py status`; after a reboot run `start`.
+* **Two proposals await the user's OK** (decisions table, 2026-10-11): `fsr_v1_random` as the default training sensor
+  (F-26), and protocol v5 = max(6,000 steps, 30 epochs) (F-28).
+* **Next after E-9:** E-12 (sensor technology) or E-10 (layout generalization) under the new defaults; T-19 (stage 3)
+  is the open research task.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -40,7 +42,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without, baselines near chance) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25). E-9 next. |
-| H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | open: in E-2 most full-data best steps were late (F-22) (E-1b) |
+| H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 proposed. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
 | H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
 
@@ -51,8 +53,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-1b | Budget adequacy (H-12) | All four E-2 models at 25 % and 100 % with twice the v4 budget (6,000 steps / 30 epochs), seed 0, vs E-2's 3-seed spread | `configs/experiments/v1_e1b_budget.yaml` | ~4 h | **running** (jobq `e1b_budget` from 04:14) |
-| 2 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9_holdout`) |
+| 1 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq `e9_holdout` from 08:20) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -64,6 +65,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-1b, training budget (F-28).
 * E-13b, slide proxy with 3 seeds (F-27).
 * E-21, sensor-model randomization (F-26).
 * E-5, property estimation, with T-21 on the OOD set (F-25).
@@ -138,3 +140,4 @@ Done tasks are in the commits and in `docs/findings.md`:
 | 2026-10-10 | E-5 keeps the checkpoint with the lowest validation property error (`select_metric: -props/zmae`). | E-5 is about property estimates; terrain accuracy is reported at that checkpoint. |
 | 2026-10-10 | E-21's randomization ranges contain the nominal sensor and "no hysteresis" but stop short of most E-6 perturbations. | Tests both interpolation (the F-23 failure) and extrapolation beyond the trained range. |
 | 2026-10-11 | Proposed (user may veto): studies after the current queue train on `configs/sensors/fsr_v1_random.yaml`; E-13b, E-1b and E-9 stay on fixed fsr_v1 to compare with E-13, E-2 and E-5. Ranges to be refit from bench data when the real skin exists. | F-26: removes the hysteresis shortcut, −0.8 points nominal for the structured models, +4–7 points under the combined shift. |
+| 2026-10-11 | Proposed (user may veto): protocol v5 = max(6,000 steps, 30 epochs) for new studies; v4 results stand and are not re-run unless a conclusion depends on absolute accuracy. | F-28: v4 under-trains at 25 % data by 2–5 points (all but flat), ≤ 2 at full data, ranking unchanged. |

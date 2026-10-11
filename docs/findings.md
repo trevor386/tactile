@@ -13,6 +13,41 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-28. E-1b, training budget: protocol v4 under-trains at 25 % data (2–5 points), is nearly adequate at full data;
+the model ranking is unchanged.** *Why:* H-12; in E-2 most best checkpoints were near the end of training (F-22).
+*Setup:*
+* `configs/experiments/v1_e1b_budget.yaml`: the E-2 models and learning rates with twice the v4 budget (6,000 steps /
+  30 epochs, cosine schedule stretched accordingly);
+* 420 / 1,680 training episodes (25 % / 100 %), seed 0;
+* compared with E-2 (same split, 3 seeds).
+
+*Result (test acc; E-2 mean ± std over 3 seeds → 2× budget, seed 0):*
+
+| model | 25 % | 100 % |
+|---|---|---|
+| somato_pool | 0.676 ± 0.014 → **0.722** (+4.7) | 0.778 ± 0.004 → **0.788** (+1.0) |
+| receptor_only | 0.665 ± 0.012 → 0.689 (+2.3) | 0.759 ± 0.009 → 0.766 (+0.7) |
+| transformer | 0.608 ± 0.022 → 0.662 (+5.5) | 0.734 ± 0.008 → 0.753 (+1.9) |
+| flat_gru | 0.592 ± 0.015 → 0.603 (+1.1) | 0.684 ± 0.008 → 0.678 (−0.7) |
+
+*Evidence:*
+* At 25 % the gains for somato_pool and the transformer exceed three and two E-2 seed stds. Their best checkpoints are
+  still late (step 5,500 and 6,000 of ~6,000).
+* At full data the gains are ≤ 2 points. Both somato_pool and the transformer gain about 2.5 E-2 stds.
+* The ranking is identical at both sizes. The somato–transformer gap at 25 % stays about the same (6.8 → 6.0 points);
+  the somato–flat gap grows (8.4 → 11.9), because the flat GRU gains least.
+
+*Caveats:*
+* One seed with the doubled budget.
+* Only 25 % and 100 % were tested. At 2.5–10 % the v4 floor of 3,000 steps already means ≥ 45 epochs.
+* The longer cosine schedule also keeps the learning rate higher for longer, so this is "budget plus schedule".
+
+*Implication:*
+* H-12 is contradicted at intermediate data. The absolute E-2 accuracies at 25 % are 2–5 points low, but F-22's
+  comparisons hold: the structured and transformer models gain about equally, and the flat GRU gains least.
+* Proposed protocol v5 for new studies: max(6,000 steps, 30 epochs), about 2× compute. Existing v4 results are not
+  re-run unless a conclusion depends on absolute accuracy.
+
 **F-27. E-13b, slide proxy with 3 seeds: the spatial stage decides it; nothing without it gets far beyond chance.**
 *Why:* confirm F-17 (H-9; one seed) with the E-2 models and learning rates. *Setup:*
 * `configs/experiments/v1_e13b_slide.yaml`: 4 slide directions (chance 0.25);
