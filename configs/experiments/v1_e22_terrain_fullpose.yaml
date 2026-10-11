@@ -1,0 +1,15 @@
+# E-22b: does the full-pose transformer (configs/models/transformer_fullpose.yaml) change the E-2 terrain comparison?
+# E-2's settings (protocol v4, fixed FSR v1, lr 0.001) and its matched transformer width (dim 108); the richer kinematic
+# encoding adds ~7k parameters (+1.6 %). Compare with E-2's transformer, seed 0, at 10 % and 100 %.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e22_terrain_fullpose.yaml
+base: configs/experiments/terrain_v1.yaml
+output_dir: runs/v1/e22_terrain_fullpose
+fractions: [0.1, 1.0]
+seeds: [0]
+match_params: false
+save_checkpoints: false
+models:
+  transformer_fullpose:
+    model: {architecture: transformer, dim: 108, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 6,
+            kin_axes: full, heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001}

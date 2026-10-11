@@ -1,0 +1,27 @@
+# E-22 (fairness of F-27): can the baselines learn the slide direction when they get the full sensor pose and a
+# learning rate suited to this task? The user's criterion: the benefit must come from building the poses into the
+# architecture, not from having them. The flat GRU already gets every body's pose in the robot frame (taxel identity
+# by input index); the E-13b transformer got positions (coarse Fourier encoding) and normals but not the along-link
+# axis. 840 training episodes, seed 0, protocol v4 (comparable with E-13b).
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e22_slide_fairness.yaml
+base: configs/experiments/terrain_v1.yaml
+base_overrides:
+  dataset: datasets/proxy_slide_1200
+  augment: {random_yaw: true, random_translation: 1.0, sensor_dropout: 0.05}
+output_dir: runs/v1/e22_slide_fairness
+fractions: [1.0]
+seeds: [0]
+match_params: true
+save_checkpoints: false
+reference_model: somato_pool
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  flat_gru_lr1e-3: {model: configs/models/flat_gru.yaml, train: {lr: 0.001}}
+  flat_gru_lr3e-3: {model: configs/models/flat_gru.yaml, train: {lr: 0.003}}
+  transformer_lr3e-4: {model: configs/models/transformer.yaml, train: {lr: 0.0003}}
+  transformer_fullpose: {model: configs/models/transformer_fullpose.yaml, train: {lr: 0.001}}
+  transformer_fullpose_lr3e-4: {model: configs/models/transformer_fullpose.yaml, train: {lr: 0.0003}}
+  transformer_fullpose_id:
+    model: {architecture: transformer, dim: 64, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 6,
+            kin_axes: full, sensor_id: true, heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001}

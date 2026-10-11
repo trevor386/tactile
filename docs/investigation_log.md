@@ -9,15 +9,21 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 08:30)
+## RESUME HERE (state as of 2026-10-11 10:40)
 
 * **Done recently:** E-5 + T-21 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28).
-* **Running in jobq:** `e9_holdout` (E-9, `runs/v1/e9_holdout`, ~3 h from 08:20). Analyse and write F-29. Check with
-  `python3 tools/jobq.py status`; after a reboot run `start`.
-* **Two proposals await the user's OK** (decisions table, 2026-10-11): `fsr_v1_random` as the default training sensor
-  (F-26), and protocol v5 = max(6,000 steps, 30 epochs) (F-28).
-* **Next after E-9:** E-12 (sensor technology) or E-10 (layout generalization) under the new defaults; T-19 (stage 3)
-  is the open research task.
+* **Running in jobq, in order:** `e9_holdout` (E-9, from 08:20, ~3 h) → `e22_slide_fairness` (~1.2 h) →
+  `e22_terrain_fullpose` (~0.5 h). Write F-29 (E-9) and F-30 (E-22). Check with `python3 tools/jobq.py status`; after
+  a reboot run `start`.
+* **New defaults (user, 2026-10-11):** new studies use `configs/experiments/terrain_v1b.yaml` (randomized FSR,
+  protocol v5 = max(6,000 steps, 15 epochs)).
+* **Open fairness question (user, 2026-10-11):** do the baselines get the sensor poses on the slide test? Code check:
+  the flat GRU does (every body's pose, taxel identity by input index); the transformer got positions (coarse Fourier
+  encoding, finest wavelength 12.5 cm vs 2–3 cm taxel spacing) and normals but not the along-link axis that the
+  structured kernel uses. E-22 tests a full-pose transformer and baseline learning rates. If it changes F-27 or E-2's
+  transformer results, the transformer baseline becomes `transformer_fullpose` and the affected comparisons are rerun.
+* **Next after E-22:** E-12 (sensor technology) or E-10 (layout generalization) on `terrain_v1b`; T-19 (stage 3) is
+  the open research task.
 
   Submit each with `python3 tools/jobq.py add NAME -- python -u scripts/data_efficiency.py --config ...` and wait in
   the background with `tools/jobq.py wait NAME`.
@@ -42,7 +48,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without, baselines near chance) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25). E-9 next. |
-| H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 proposed. |
+| H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
 | H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
 
@@ -54,6 +60,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 1 | E-9 | Held-out friction range (H-2b, H-11) | The top 30 % of each class's friction range held out (`holdout` option, `holdout/*` metrics); E-5 tasks, models and learning rates, full data, 3 seeds. Held-out ranges lie above each class's own training range, and above the whole training set for friction > 0.88. Compare held-out errors with E-5's in-distribution errors at similar friction (F-25). A compliance holdout can follow | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq `e9_holdout` from 08:20) |
+| 2 | E-22 | Baseline fairness on the slide test (user, 2026-10-11) | Code check: flat GRU gets every body's pose (complete); transformer lacked the along-link axis and fine position encoding. Slide proxy at 840 episodes, seed 0: `transformer_fullpose` (position + x and z axes, Fourier bands to ~3 cm) at lr 1e-3 / 3e-4 and with sensor IDs, the old transformer at 3e-4, flat GRU at 1e-3 / 3e-3, somato_pool as anchor. Then the full-pose transformer on terrain (E-2 settings, 10 % / 100 %) to see whether E-2's transformer was handicapped | `configs/experiments/v1_e22_slide_fairness.yaml`, `v1_e22_terrain_fullpose.yaml` | ~1.7 h | queued in jobq after E-9 |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 6 | E-12 | Sensor technology (H-5) | Ideal + shear and capacitive v1 vs FSR v1, for somato_pool / receptor_only / baselines | to write | ~4 h | queued |
 | 7 | E-10 | Layout generalization (H-2d) | Dead-taxel patterns; other link counts / taxel densities (structured models only: the baselines are tied to one layout) | to write | < 1 h | queued |
@@ -139,5 +146,5 @@ Done tasks are in the commits and in `docs/findings.md`:
 | 2026-10-10 | The measured-sinkage target is the penetration of each link capsule's lowest point (`data/derived.py`), regressed as log(sinkage + 0.1 mm); E-5 restarted with it. | The frame-origin depth read link tilt as sinkage: 0.8 ± 0.5 mm on rigid ground vs 0.05 mm true (packed snow 0.47, fresh snow 6.4 mm), so it was mostly pose noise outside fresh snow. No finding had used it. |
 | 2026-10-10 | E-5 keeps the checkpoint with the lowest validation property error (`select_metric: -props/zmae`). | E-5 is about property estimates; terrain accuracy is reported at that checkpoint. |
 | 2026-10-10 | E-21's randomization ranges contain the nominal sensor and "no hysteresis" but stop short of most E-6 perturbations. | Tests both interpolation (the F-23 failure) and extrapolation beyond the trained range. |
-| 2026-10-11 | Proposed (user may veto): studies after the current queue train on `configs/sensors/fsr_v1_random.yaml`; E-13b, E-1b and E-9 stay on fixed fsr_v1 to compare with E-13, E-2 and E-5. Ranges to be refit from bench data when the real skin exists. | F-26: removes the hysteresis shortcut, −0.8 points nominal for the structured models, +4–7 points under the combined shift. |
-| 2026-10-11 | Proposed (user may veto): protocol v5 = max(6,000 steps, 30 epochs) for new studies; v4 results stand and are not re-run unless a conclusion depends on absolute accuracy. | F-28: v4 under-trains at 25 % data by 2–5 points (all but flat), ≤ 2 at full data, ranking unchanged. |
+| 2026-10-11 | New studies train on `configs/sensors/fsr_v1_random.yaml` (approved by the user). E-13b, E-1b, E-9 and E-22 stay on fixed fsr_v1 to compare with E-13, E-2 and E-5. Ranges to be refit from bench data when the real skin exists. | F-26: removes the hysteresis shortcut, −0.8 points nominal for the structured models, +4–7 points under the combined shift. |
+| 2026-10-11 | Protocol v5 = max(6,000 steps, 15 epochs), in the new base `configs/experiments/terrain_v1b.yaml`. The user asked for a balance instead of the proposed 2× budget (30 epochs). v4 results stand and are not re-run unless a conclusion depends on absolute accuracy. | F-28: the large under-training (2–5 points) is at intermediate data, where runs are cheap. Full-data runs (most of the compute) gain ≤ 2 points with the ranking unchanged. Cost: about +25 % for a 10 % / 100 % study, +45 % for a four-point curve, 0 % for full-data-only studies. Remaining caveat: full-data accuracies may be ~1–2 points low, the transformer's most (+1.9 at 2×). |

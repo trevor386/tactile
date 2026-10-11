@@ -136,8 +136,12 @@ class TransformerBaselineConfig:
     attn_heads: int = 4
     ffn_mult: int = 2
     patch_steps: int = 5  # latent steps per token (time patch); windows are padded at the start to a multiple
-    pos_bands: int = 4  # Fourier bands of the kinematic encoding (position / `kinematics_scale`, normal)
+    pos_bands: int = 4  # Fourier bands of the kinematic encoding (position / `kinematics_scale`, frame axes)
     kinematics_scale: float = 0.5  # m
+    # Sensor orientation in the kinematic encoding: "normal" (z axis only; v1 studies up to E-13b) or "full" (x and z
+    # axes, the whole frame: for taxels x runs along the link, so "toward the head" and "around the body" are known
+    # locally, as in the structured model's local-frame kernel and the flat baseline's body poses).
+    kin_axes: str = "normal"
     sensor_id: bool = False  # also a learned per-sensor embedding (absolute identity, layout-specific)
     max_sensors: int = 1024
     max_patches: int = 64
@@ -148,6 +152,8 @@ class TransformerBaselineConfig:
         self.heads = {k: v if isinstance(v, HeadConfig) else from_dict(HeadConfig, v) for k, v in self.heads.items()}
         if self.dim % self.attn_heads:
             raise ValueError("dim must be divisible by attn_heads")
+        if self.kin_axes not in ("normal", "full"):
+            raise ValueError(f"kin_axes must be 'normal' or 'full', got {self.kin_axes!r}")
 
 
 class TransformerBaseline(nn.Module):
@@ -170,7 +176,7 @@ class TransformerBaseline(nn.Module):
         self.patch = nn.ModuleDict({g: nn.Linear(P * s.substeps * s.channels, D) for g, s in groups.items()})
         self.group_embed = nn.Embedding(len(groups), D)
         self.time_embed = nn.Embedding(cfg.max_patches, D)
-        self.kin_enc = FourierEncoding(6, cfg.pos_bands)
+        self.kin_enc = FourierEncoding(9 if cfg.kin_axes == "full" else 6, cfg.pos_bands)
         self.kin = nn.Linear(self.kin_enc.out_dim, D)
         self.sensor_embed = nn.Embedding(cfg.max_sensors, D) if cfg.sensor_id else None
         self.cls = nn.Parameter(torch.randn(D) * 0.02)
@@ -214,7 +220,8 @@ class TransformerBaseline(nn.Module):
         # Kinematics at the last latent step of each patch, in the robot frame.
         last = torch.arange(P - 1 - pad, L, P, device=tok.device).clamp_min(0)
         p, r = in_robot_frame(batch.pos[:, last], batch.rot[:, last], self.ref)
-        tok = tok + self.kin(self.kin_enc(torch.cat([p / cfg.kinematics_scale, r[..., :, 2]], -1)).to(tok.dtype))
+        axes = [r[..., :, 0], r[..., :, 2]] if cfg.kin_axes == "full" else [r[..., :, 2]]
+        tok = tok + self.kin(self.kin_enc(torch.cat([p / cfg.kinematics_scale, *axes], -1)).to(tok.dtype))
         tok = tok + self.time_embed.weight[:T, None]
         N = tok.shape[2]
         seq = torch.cat([self.cls.expand(B, 1, -1).to(tok.dtype), tok.reshape(B, T * N, -1)], 1)

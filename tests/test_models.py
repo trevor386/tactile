@@ -305,11 +305,15 @@ def test_brain_model_invariance_masking_and_transfer(small_desc, small_layout, s
     assert o3["terrain"].shape == (2, 2, 3)
 
 
-@pytest.mark.parametrize("arch", ["flat_recurrent", "transformer"])
+@pytest.mark.parametrize("arch", ["flat_recurrent", "transformer", "transformer_full"])
 def test_baselines_kinematics_masking_and_matching(arch, model, small_desc, small_layout, small_info):
     torch.manual_seed(0)
+    full = arch == "transformer_full"
+    arch = "transformer" if full else arch
     cfg = ({"architecture": arch, "hidden": 16} if arch == "flat_recurrent" else
            {"architecture": arch, "dim": 16, "layers": 1, "attn_heads": 2, "patch_steps": 2})
+    if full:
+        cfg.update(kin_axes="full", pos_bands=6)
     cfg["heads"] = {"terrain": {"out_dim": 3, "hidden": 16}}
     m = build_model(cfg, GROUPS, small_info).eval()
     batch = make_batch(small_desc, small_layout, small_info, L=5)
@@ -322,6 +326,12 @@ def test_baselines_kinematics_masking_and_matching(arch, model, small_desc, smal
     bent = SomatoBatch(batch.readings, batch.pos.clone(), batch.rot, batch.info)
     bent.pos[..., small_info.slices["tactile"], 2] += 0.05
     assert not torch.allclose(out["terrain"], m(bent)[0]["terrain"], atol=1e-4)
+    # The full-pose transformer also sees each sensor's in-plane orientation (its x axis), the normal-only one not.
+    spun = SomatoBatch(batch.readings, batch.pos, batch.rot.clone(), batch.info)
+    tac = small_info.slices["tactile"]  # rotate every taxel frame by 180 degrees about its normal (not the IMU's)
+    spun.rot[..., tac, :, :2] = -spun.rot[..., tac, :, :2]
+    if arch == "transformer":
+        assert torch.allclose(out["terrain"], m(spun)[0]["terrain"], atol=1e-4) != full
     mask = torch.ones(2, small_info.num_nodes, dtype=torch.bool)
     mask[:, 2] = False
     batch.node_mask = mask

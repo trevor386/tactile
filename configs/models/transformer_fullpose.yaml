@@ -1,0 +1,13 @@
+# transformer.yaml with the full sensor pose in the kinematic encoding (E-22): position plus the sensor's x axis
+# (along the link for taxels) and normal, and Fourier bands down to a ~3 cm wavelength (taxel spacing 2-3 cm). The same
+# geometric information the structured model's local-frame kernel uses, given as an input instead of built into the
+# architecture.
+architecture: transformer
+dim: 64
+layers: 4
+attn_heads: 4
+patch_steps: 5
+pos_bands: 6
+kin_axes: full
+heads:
+  terrain: {type: global, hidden: 128}

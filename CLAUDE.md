@@ -39,6 +39,8 @@ with the **RESUME HERE** section of `docs/investigation_log.md`.
 * YAML reads `1e-3` as a string: write learning rates as decimals (`0.001`).
 * Windows must be a multiple of the model's `brain_stride` (5 in the v1 configs).
 * Main-study models and their learning rates: `configs/experiments/v1_main_curves.yaml`.
+* New studies use the base `configs/experiments/terrain_v1b.yaml` (protocol v5: randomized FSR training sensor,
+  max(6,000 steps, 15 epochs)). `terrain_v1.yaml` (v4, fixed FSR) stays for reproducing the earlier studies.
 
 ## Code and git
 * Edit repo files with the Edit/Write tools (the user reviews diffs), not sed/heredocs.
