@@ -11,7 +11,8 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 00:00)
 
-* **Running in jobq:** `e9b_holdout_compliance` (~3 h from 23:51). Write F-36 (E-9b).
+* **Running in jobq** (~6.5 h from 23:51): `e9b_holdout_compliance` → `e10b_collect` → `e10b_finetune`. Write F-36
+  (E-9b) and F-37 (E-10b).
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
@@ -59,6 +60,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 1 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq from 23:51) |
+| 2 | E-10b | Fine-tuning on a new robot (H-2d, F-32 follow-up) | 12-link training set (1,200 episodes, seed 2, disjoint from E-10's test set); somato_pool fine-tuned from the 16-link E-21 model (lr 3e-4, input statistics kept) vs zero-shot vs from scratch, plus the flat GRU from scratch; ~8 / 42 / 168 / 840 episodes, seed 0, protocol v5 | `configs/experiments/v1_e10b_finetune_12links.yaml` | ~3.2 h | queued in jobq (`e10b_collect`, `e10b_finetune`) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
