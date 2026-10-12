@@ -13,6 +13,49 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-34. E-12, sensor technology: the structured lead holds on every skin (5–10 points over the best baseline); the
+skin itself matters far more than the model (an ideal shear-sensing skin is +15 points over the FSR); stage 2 adds 1–4
+points at full data, depending on the skin.** *Why:* H-5 (stage 2's value depends on sensor physics), and whether the
+model comparison depends on the FSR. *Setup:*
+* `configs/experiments/v1_e12_sensor_tech.yaml` on the new base (`terrain_v1b`: protocol v5);
+* the E-2 models and learning rates (tuned on the FSR), widths matched per skin, seed 0, 10 % / 100 %;
+* three skins, with the same joint and IMU models:
+  * randomized FSR v1 (normal force only, hysteresis);
+  * `ideal_shear_v1.yaml`: normal and shear pressure, no noise or dynamics, an upper bound;
+  * `capacitive.yaml`: viscoelastic dielectric, drift, normal only.
+
+*Result (test acc, 170 / 1,680 training episodes):*
+
+| skin | somato_pool | receptor_only | transformer | flat_gru | lead over best baseline | stage 2 (somato − receptor) |
+|---|---|---|---|---|---|---|
+| FSR, randomized | **0.607 / 0.785** | 0.605 / 0.748 | 0.507 / 0.731 | 0.504 / 0.700 | +10.0 / +5.4 | +0.2 / +3.7 |
+| ideal + shear | **0.786 / 0.932** | 0.776 / 0.900 | 0.731 / 0.838 | 0.616 / 0.784 | +5.5 / +9.4 | +1.0 / +3.2 |
+| capacitive | 0.697 / **0.831** | **0.699** / 0.819 | 0.619 / 0.772 | 0.617 / 0.778 | +7.8 / +5.3 | −0.2 / +1.2 |
+
+*Evidence:*
+* The ranking (structured > transformer ≈ flat) holds on all three skins at both data sizes. The structured models
+  lead by 5–10 points, so F-22's conclusion does not hinge on the FSR model.
+* The skin matters most: an ideal skin with shear lifts somato_pool from 0.785 to 0.932 at full data, and a
+  capacitive skin to 0.831. The FSR's dynamics and lack of shear are the main limit on what touch can tell about
+  terrain here.
+* With shear, the transformer gains most among the baselines (+10.7 points at full data); the flat GRU gains less
+  (+8.4).
+* Stage 2's value at full data is largest for the FSR and the ideal shear skin (3–4 points) and small for the
+  capacitive one (1.2). At 10 % it is ≤ 1 point for all. That fits F-22 (on terrain, stage 1 carries most of the
+  benefit) and F-27 (stage 2 is decisive only for moving stimuli).
+
+*Caveats:*
+* One seed. Differences of 1–2 points (e.g. the per-skin stage-2 values) are within seed noise (std 0.005–0.02).
+* Learning rates were tuned on the FSR.
+* The capacitive model is the v0-era model without per-taxel variability or randomization.
+* Ideal + shear is an upper bound, not a real sensor.
+
+*Implication:*
+* H-5: stage 2's value depends on the skin only modestly (1–4 points at full data). The task matters much more (F-27).
+* Robustness of the main conclusion across sensor technologies: supported.
+* For hardware, shear sensing is worth far more than any architecture choice here (+15 points). Worth telling whoever
+  designs the skin.
+
 **F-33. E-23, compute matching: given somato_pool's online compute (a 13× wider, 37M-parameter flat GRU), the flat
 baseline gains ~2 points and stays 5–7 points behind; the ranking is unchanged.** *Why:* the user (2026-10-11) asked to
 match models by online cost, since that matters for deployment. At matched parameters the flat GRU is 7–19× cheaper per

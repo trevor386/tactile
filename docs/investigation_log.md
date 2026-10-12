@@ -9,14 +9,14 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-11 17:20)
+## RESUME HERE (state as of 2026-10-12 00:00)
 
-* **Running in jobq** (~10 h from 17:14): `e12_fsr_random` → `e12_ideal_shear` → `e12_capacitive` →
-  `e18a_streaming` → `e9b_holdout_compliance`. Write F-34 (E-12), F-35 (E-18a), F-36 (E-9b).
+* **Running in jobq** (~3.5 h from 23:50): `e18a_streaming` → `e9b_holdout_compliance`. Write F-35 (E-18a), F-36
+  (E-9b).
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
-  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33).
+  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34).
 * **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
   locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
   pursued.
@@ -41,7 +41,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). (c) E-8. (d) **supported** (F-32): 4 dead links cost the structured model 1 point vs 4–6 for the baselines; zero-shot to 2× taxel density −1 point, to a 12-link robot −4.5; the baselines cannot run on another layout. |
 | H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics; sensor-model randomization removes it (F-26). |
 | H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
-| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17). E-12 for sensor physics. |
+| H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17, F-27). Sensor physics changes it only modestly: +1–4 points at full data (most for FSR and ideal shear, least for capacitive), ≤ 1 at 10 % (F-34, one seed). |
 | H-6 | The continuous 3D kernel beats feature-dependent graph message passing. | weakly supported (F-18, one seed) |
 | H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
@@ -59,9 +59,8 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-12 | Sensor technology (H-5) | The E-2 models on `terrain_v1b` (protocol v5), seed 0, 10 % / 100 %, three skins: randomized FSR (reference under v5), ideal with shear (upper bound), capacitive. somato_pool vs receptor_only gives stage 2's value per skin. Learning rates from the FSR (caveat) | `configs/experiments/v1_e12_sensor_tech.yaml` (+ `--set` per skin), `configs/sensors/ideal_shear_v1.yaml` | ~6.5 h | **running** (jobq from 17:14: `e12_fsr_random`, `e12_ideal_shear`, `e12_capacitive`) |
-| 2 | E-18a | Streaming without retraining (deployment, F-31) | E-21 checkpoints (window-trained) streamed over whole 3 s test episodes with the state carried: accuracy vs time since reset (0–0.5 / 0.5–1 / 1–2 / 2–3 s) for somato_pool, receptor_only, flat_gru, vs window-mode accuracy. Smoke test: flat GRU 0.62 → 0.73, above its window-mode 0.695 | `scripts/analysis/streaming_eval.py` | ~15 min | queued in jobq (`e18a_streaming`) |
-| 3 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9b_holdout_compliance`) |
+| 1 | E-18a | Streaming without retraining (deployment, F-31) | E-21 checkpoints (window-trained) streamed over whole 3 s test episodes with the state carried: accuracy vs time since reset (0–0.5 / 0.5–1 / 1–2 / 2–3 s) for somato_pool, receptor_only, flat_gru, vs window-mode accuracy. Smoke test: flat GRU 0.62 → 0.73, above its window-mode 0.695 | `scripts/analysis/streaming_eval.py` | ~15 min | queued in jobq (`e18a_streaming`) |
+| 2 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9b_holdout_compliance`) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
@@ -71,6 +70,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-12, sensor technology (F-34); seeds if the per-skin stage-2 values matter.
 * E-23, compute-matched flat GRU (F-33).
 * E-10, layout generalization (F-32); fine-tuning on the 12-link robot is a possible follow-up.
 * E-22, baseline fairness on the slide test (F-30).
