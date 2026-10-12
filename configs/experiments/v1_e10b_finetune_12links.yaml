@@ -1,0 +1,31 @@
+# E-10b (H-2d follow-up of F-32): how much data does the structured model need on a new robot when it starts from the
+# 16-link model, compared with training from scratch? A 12-link training set (1,200 mjlab episodes, collection seed 2,
+# disjoint from the 12-link test set of E-10), protocol v5 with the randomized FSR.
+# * somato_finetune: the E-21 somato_pool (16 links, seed 0), fine-tuned at lr 3e-4 with its input statistics kept;
+# * somato_zeroshot: the same checkpoint without training (the E-10 transfer, on this test split);
+# * somato_scratch, flat_scratch: trained on the 12-link data only (the flat GRU cannot reuse a 16-link model).
+#   python scripts/mjlab/collect_mjlab.py --config configs/experiments/collect_mjlab.yaml \
+#       --robot configs/robots/snake_3d_12links.yaml --num_envs 400 --rounds 3 --seed 2 --out datasets/mjlab_v1_links12_1200
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e10b_finetune_12links.yaml
+base: configs/experiments/terrain_v1b.yaml
+base_overrides:
+  dataset: datasets/mjlab_v1_links12_1200
+output_dir: runs/v1/e10b_finetune_12links
+fractions: [0.01, 0.05, 0.2, 1.0]   # ~8 / 42 / 168 / 840 training episodes
+seeds: [0]
+match_params: false
+save_checkpoints: false
+models:
+  somato_finetune:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.0003, fit_normalizers: false,
+            init_checkpoint: runs/v1/sensor_random/somato_pool/frac1.0_seed0/model.pt}
+  somato_zeroshot:
+    model: configs/models/somato_v1_pool.yaml
+    train: {epochs: 0, min_steps: 0, fit_normalizers: false,
+            init_checkpoint: runs/v1/sensor_random/somato_pool/frac1.0_seed0/model.pt}
+  somato_scratch: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  flat_scratch:
+    model: {architecture: flat_recurrent, hidden: 156, chunk_features: stats, kinematics: true,
+            heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}

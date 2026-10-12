@@ -176,6 +176,9 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
     info = LayoutInfo.from_layout(store.layout, store.desc, getattr(model_cfg, "cluster_mode", "body"),
                                   getattr(model_cfg, "num_clusters", None))
     model = build_model(model_cfg, groups, info)
+    if cfg.train.init_checkpoint:  # fine-tuning: same architecture, any sensor layout for the hierarchical models
+        init = torch.load(cfg.train.init_checkpoint, map_location="cpu", weights_only=False)
+        model.load_state_dict(init["model_state"])
     device = resolve_device(cfg.train.device)
     preparer = BatchPreparer(store.layout, info, suite, device, cfg.augment)
     run_dir = Path(cfg.output_dir) / cfg.name

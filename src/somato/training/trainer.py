@@ -46,6 +46,10 @@ class TrainConfig:
     # "-props/zmae"). A metric missing from validation falls back to the lowest validation loss.
     select_metric: str = "terrain/acc_last"
     normalizer_batches: int = 8
+    fit_normalizers: bool = True  # False keeps the input statistics the model has (e.g. from ``init_checkpoint``)
+    # Start from the weights (and input normalizers) of a run_experiment checkpoint of the same architecture
+    # (fine-tuning, e.g. on another robot: E-10b). Empty = random initialization.
+    init_checkpoint: str = ""
     log_every: int = 0  # steps between progress prints (0 = once per epoch)
     max_steps_per_epoch: int = 0  # 0 = full epoch
 
@@ -129,7 +133,8 @@ class Trainer:
     def fit(self, train_ds: Dataset, val_ds: Dataset | None = None) -> dict[str, Any]:
         cfg = self.cfg
         torch.manual_seed(cfg.seed)
-        self.fit_normalizers(train_ds)
+        if cfg.fit_normalizers:
+            self.fit_normalizers(train_ds)
         loader = self._loader(train_ds, shuffle=True)
         steps_per_epoch = len(loader) if not cfg.max_steps_per_epoch else min(len(loader), cfg.max_steps_per_epoch)
         if cfg.tbptt_chunk > 0:  # one optimizer step per chunk

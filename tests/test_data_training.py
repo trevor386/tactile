@@ -143,6 +143,20 @@ def test_run_experiment_and_reload(tmp_path, dataset_dir, store):
     assert model.heads["terrain"].out[-1].out_features == len(store.meta.terrain_names)
 
 
+def test_finetune_from_checkpoint(tmp_path, dataset_dir, store):
+    """``init_checkpoint`` loads a run's weights and, with ``fit_normalizers`` off, its input statistics: without
+    further training the test result is reproduced exactly."""
+    kw = dict(dataset=str(dataset_dir), output_dir=str(tmp_path), model=TINY_MODEL, sensors=IDEAL, window=6,
+              stride=3, eval_stride=6, split=(1 / 3, 1 / 3, 1 / 3))
+    a = run_experiment(ExperimentConfig(name="a", train=TrainConfig(epochs=1, batch_size=4, output_steps=2), **kw),
+                       store, verbose=False)
+    tune = TrainConfig(epochs=0, batch_size=4, output_steps=2, fit_normalizers=False,
+                       init_checkpoint=str(tmp_path / "a" / "model.pt"))
+    b = run_experiment(ExperimentConfig(name="b", train=tune, save_checkpoint=False, **kw), store, verbose=False)
+    assert abs(a["test/terrain/acc_last"] - b["test/terrain/acc_last"]) < 1e-6
+    assert abs(a["test/loss"] - b["test/loss"]) < 1e-5
+
+
 @pytest.mark.parametrize("groups", [["tactile"], ["joint", "imu"]])
 def test_input_groups_ablation(tmp_path, dataset_dir, store, groups):
     view = store.select_groups(groups)

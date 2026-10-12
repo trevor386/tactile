@@ -24,10 +24,11 @@ def main():
     parser.add_argument("--rounds", type=int, default=None)
     parser.add_argument("--num_envs", type=int, default=None)
     parser.add_argument("--robot", default=None, help="robot config overriding the collection config's (e.g. E-10)")
+    parser.add_argument("--seed", type=int, default=None, help="overrides the config's seed (keep datasets disjoint)")
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
     overrides = {k: v for k, v in {"out": args.out, "rounds": args.rounds, "num_envs": args.num_envs,
-                                   "robot": args.robot}.items() if v is not None}
+                                   "robot": args.robot, "seed": args.seed}.items() if v is not None}
     cfg = CollectConfig.from_yaml(args.config, overrides)
     gen = seed_everything(cfg.seed)
     runner, desc, layout, catalog = make_mjlab_runner(cfg, args.device, gen)
