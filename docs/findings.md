@@ -13,6 +13,43 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-40. E-25, stage 1 must be trained: frozen at random weights it costs 8–11 points; the architecture alone (random
+receptors + trained stages 2–3) still beats the baselines at 10 % but not at full data.** *Why:* F-39 found that an
+untrained stage 1 already makes physical quantities linearly readable. Is the receptor stage's benefit architectural?
+*Setup:* `configs/experiments/v1_e25_random_stage1.yaml`, `terrain_v1b` (randomized FSR, protocol v5), 3 seeds; new
+`train.freeze: [temporal]` keeps stage 1 at its random initialization (input statistics still fitted).
+
+*Result (test acc, mean ± std over seeds; baselines from E-12, same protocol, seed 0):*
+
+| model | trainable params | 170 episodes | 1,680 episodes |
+|---|---|---|---|
+| somato_pool, all trained | 428k | **0.615 ± 0.015** | **0.773 ± 0.005** |
+| somato_pool, stage 1 random and frozen | 311k | 0.536 ± 0.007 | 0.663 ± 0.008 |
+| receptor_only, stage 1 random and frozen | 311k | 0.491 ± 0.011 | 0.610 ± 0.004 |
+| (E-12) transformer / flat GRU | 439k / 430k | 0.507 / 0.504 | 0.731 / 0.700 |
+
+*Evidence:*
+* Training stage 1 is worth 8 points at 10 % and 11 at full data for somato_pool; for receptor_only (no stage 2)
+  about 11 / 14 (trained receptor_only on this protocol: 0.605 / 0.748, E-12 seed 0).
+* With random receptors, the 3D kernel still adds 4.5–5 points (somato 0.536 / 0.663 vs receptor 0.491 / 0.610).
+  Stage 2 can partly compensate for untrained receptors.
+* Random receptors plus trained stages 2–3 still beat both baselines at 10 % (0.536 vs 0.507), but fall 4–7 points
+  behind them at full data.
+
+*Caveats:*
+* One random initialization scheme (PyTorch defaults).
+* Frozen models have ~27 % fewer trainable parameters, though the same compute.
+* Baseline numbers are single-seed.
+
+*Implication:*
+* The receptor stage's advantage is the combination of architecture and learning. Its structure (one encoder shared by
+  all taxels, own history only) makes learning efficient, but the learned temporal features matter (8–11 points).
+  F-39's probes showed that physical linearity alone is not what terrain recognition needs.
+* H-14 refined: stage 1 carries most of the benefit *because* a shared, trained receptor learns task-relevant temporal
+  features from every taxel's data at once.
+* For SSL (T-11): a pretext task should train stage 1's temporal features, not just keep it random. This makes
+  stage-1 pretraining a plausible data-efficiency lever.
+
 **F-39. E-24, what the stages encode: stage 1's per-taxel features make the true pressure more linearly readable than
 the raw FSR history (R² 0.63 vs 0.52 in contact), and even untrained (random-weight) stage 1 does so (0.65); training
 for terrain adds a little link-level contact and slip information and gives up some per-taxel detail. Link slip is
