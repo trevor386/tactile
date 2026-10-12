@@ -1,0 +1,23 @@
+# E-10c (F-37 follow-up): a safer fine-tuning recipe for a new robot. F-37: naive fine-tuning on 10-40 episodes fell
+# below the zero-shot 16-link model (0.754). Now the starting weights are validated before the first update (kept if
+# nothing beats them), and three recipes are compared, all from the E-21 somato_pool (seed 0), input statistics kept:
+# * ft_all_lr1e-4: all weights at a lower lr;
+# * ft_freeze1: stage 1 (receptors) frozen, the rest at lr 3e-4;
+# * ft_freeze12: stages 1-2 frozen, only the projection and stage-3 head train.
+# 12-link data as E-10b, ~10 / 40 / 170 episodes, 3 seeds (the small subsets differ per seed); a 1,500-step budget
+# (fine-tuning needs fewer steps than training from scratch).
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e10c_finetune_recipes.yaml
+base: configs/experiments/terrain_v1b.yaml
+base_overrides:
+  dataset: datasets/mjlab_v1_links12_1200
+  train: {min_steps: 1500, epochs: 1, fit_normalizers: false,
+          init_checkpoint: runs/v1/sensor_random/somato_pool/frac1.0_seed0/model.pt}
+output_dir: runs/v1/e10c_finetune_recipes
+fractions: [0.01, 0.05, 0.2]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  ft_all_lr1e-4: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.0001}}
+  ft_freeze1: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.0003, freeze: [temporal]}}
+  ft_freeze12: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.0003, freeze: [temporal, spatial]}}

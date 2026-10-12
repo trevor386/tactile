@@ -156,6 +156,26 @@ def test_finetune_from_checkpoint(tmp_path, dataset_dir, store):
     assert abs(a["test/terrain/acc_last"] - b["test/terrain/acc_last"]) < 1e-6
     assert abs(a["test/loss"] - b["test/loss"]) < 1e-5
 
+def test_trainer_freeze(store):
+    """``freeze`` keeps the named modules fixed while the rest trains."""
+    from somato.models.builder import build_model, parse_model_config
+    from somato.training.tasks import build_tasks
+    from somato.training.trainer import Trainer
+
+    info = LayoutInfo.from_layout(store.layout, store.desc)
+    suite = build_suite(store, IDEAL)
+    cfg = parse_model_config(copy.deepcopy(TINY_MODEL))
+    cfg.heads["terrain"].out_dim = len(store.meta.terrain_names)
+    model = build_model(cfg, group_specs(store, suite), info)
+    before = copy.deepcopy(model.state_dict())
+    trainer = Trainer(model, build_tasks({"terrain": {"type": "classification"}}),
+                      BatchPreparer(store.layout, info, suite, "cpu", AugmentConfig()),
+                      TrainConfig(epochs=1, batch_size=4, output_steps=2, freeze=["temporal"]))
+    trainer.fit(WindowDataset(store, list(range(10)), 6, 3), None)
+    after = model.state_dict()
+    assert all(torch.equal(before[k], after[k]) for k in before if k.startswith("temporal") and "normalizer" not in k)
+    assert any(not torch.equal(before[k], after[k]) for k in before if k.startswith(("spatial", "heads")))
+
 
 @pytest.mark.parametrize("groups", [["tactile"], ["joint", "imu"]])
 def test_input_groups_ablation(tmp_path, dataset_dir, store, groups):

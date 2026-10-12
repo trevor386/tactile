@@ -9,14 +9,14 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-12 00:00)
+## RESUME HERE (state as of 2026-10-12 06:00)
 
-* **Running in jobq** (~6.5 h from 23:51): `e9b_holdout_compliance` → `e10b_collect` → `e10b_finetune`. Write F-36
-  (E-9b) and F-37 (E-10b).
+* **Running in jobq:** `e10c_finetune` (E-10c, ~2.5 h from 05:55). Write F-38.
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
-  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34), E-18a streaming (F-35).
+  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34), E-18a streaming
+  (F-35), E-9b compliance holdout (F-36), E-10b 12-link transfer (F-37).
 * **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
   locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
   pursued.
@@ -38,7 +38,7 @@ data. The structure is a starting point, changed only on evidence.
 | ID | hypothesis / conjecture | status |
 |---|---|---|
 | H-1 | The structured hierarchy is more data-efficient than the flat GRU and the transformer (equal parameters, same inputs incl. kinematics). | **supported in sim v1** (F-22: 2–3× fewer episodes, gaps ≥ 2 seed std at all sizes; also at matched online compute, F-33: a 37M-parameter flat GRU stays 5–7 points behind; fair inputs, F-30) |
-| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). (c) E-8. (d) **supported** (F-32): 4 dead links cost the structured model 1 point vs 4–6 for the baselines; zero-shot to 2× taxel density −1 point, to a 12-link robot −4.5; the baselines cannot run on another layout. |
+| H-2 | It generalizes better under shift: (a) sensor non-idealities, (b) terrain outside the training range, (c) another simulator, (d) layout changes. | (a) **supported with sensor randomization** (F-26): trained on a fixed FSR, stage 1 overfit the simulated hysteresis (F-23); trained on randomized FSRs that shortcut is gone, the combined-shift drop shrinks from ~14 to ~8.5 points, and the structured lead under it grows to +8.2 points (larger hysteresis than trained still costs 5–7). (b) class posteriors give no OOD awareness for any model (F-24); property estimates keep the right order on unseen terrain with 1–3× the in-distribution error and a conservative friction bias, structure helps sinkage but not friction there (F-25). Held-out friction range: every model loses ~20 classification points and doubles its friction error; structure keeps its absolute lead but does not degrade less (F-29). Held-out compliance range: classification −1 point, sinkage error doubles for every model (F-36). (c) E-8. (d) **supported** (F-32): 4 dead links cost the structured model 1 point vs 4–6 for the baselines; zero-shot to 2× taxel density −1 point, to a 12-link robot −4.5; the baselines cannot run on another layout. Transfer is worth 170–840 episodes of new-robot data (F-37); safe fine-tuning in E-10c. |
 | H-3 | A simple simulator lets models exploit sim shortcuts that fail in reality. | open. v1 removed the synthetic sinkage shortcut; F-23 found a sensor-model shortcut (hysteresis signature) used by every model that reads raw dynamics; sensor-model randomization removes it (F-26). |
 | H-4 | Structure trades expressiveness for efficiency: the advantage shrinks with data and may cross over. | partial (F-22: the transformer gap halves over 40× data; no crossover; the flat gap does not shrink). E-11 for more data. |
 | H-5 | Stage-2 spatial interaction matters when single taxels are ambiguous; its value depends on sensor physics and task. | task-dependent: +1–2 points on terrain (F-18, F-22), decisive for moving stimuli (F-17, F-27). Sensor physics changes it only modestly: +1–4 points at full data (most for FSR and ideal shear, least for capacitive), ≤ 1 at 10 % (F-34, one seed). |
@@ -47,7 +47,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without; F-30, fair baselines with full poses and tuned lr: flat GRU 0.57, transformer at chance, both fit the training set) |
 | H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | open (E-14, E-15) |
-| H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help for friction out of distribution (F-25, F-29: friction error doubles beyond the trained range for every model). |
+| H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help out of distribution (F-25; F-29 and F-36: friction and sinkage errors double beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
 | H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
@@ -59,8 +59,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq from 23:51) |
-| 2 | E-10b | Fine-tuning on a new robot (H-2d, F-32 follow-up) | 12-link training set (1,200 episodes, seed 2, disjoint from E-10's test set); somato_pool fine-tuned from the 16-link E-21 model (lr 3e-4, input statistics kept) vs zero-shot vs from scratch, plus the flat GRU from scratch; ~8 / 42 / 168 / 840 episodes, seed 0, protocol v5 | `configs/experiments/v1_e10b_finetune_12links.yaml` | ~3.2 h | queued in jobq (`e10b_collect`, `e10b_finetune`) |
+| 1 | E-10c | Safer fine-tuning on a new robot (F-37 follow-up, H-2d, H-10) | Starting weights validated before the first update (new); three recipes from the E-21 16-link somato_pool: all weights at lr 1e-4, stage 1 frozen (lr 3e-4), stages 1–2 frozen; 12-link data, ~10 / 40 / 170 episodes, 3 seeds, 1,500-step budget. Target: never below zero-shot (0.754), and above scratch | `configs/experiments/v1_e10c_finetune_recipes.yaml` | ~2.5 h | **running** (jobq from 05:55) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
@@ -70,6 +69,8 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-10b, transfer to a 12-link robot (F-37).
+* E-9b, held-out compliance range (F-36).
 * E-18a, streaming without retraining (F-35).
 * E-12, sensor technology (F-34); seeds if the per-skin stage-2 values matter.
 * E-23, compute-matched flat GRU (F-33).

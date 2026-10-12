@@ -13,6 +13,79 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-37. E-10b, transfer to a new robot: the 16-link model used as is on the 12-link robot (0.754) beats training from
+scratch until ~170+ episodes; naive fine-tuning on 10–40 episodes makes it worse; with 840 episodes fine-tuning edges
+out scratch training.** *Why:* how much data does a new robot need when starting from the structured model of another
+robot (F-32 follow-up)? *Setup:*
+* `configs/experiments/v1_e10b_finetune_12links.yaml`: 12-link training set `mjlab_v1_links12_1200` (collection seed
+  2, disjoint from E-10's test set);
+* protocol v5, randomized FSR, seed 0;
+* the E-21 16-link somato_pool (seed 0):
+  * zero-shot;
+  * fine-tuned at lr 3e-4 with its input statistics kept (new `train.init_checkpoint`, `train.fit_normalizers`);
+* from scratch: somato_pool (lr 1e-3) and flat GRU (lr 3e-4).
+
+*Result (test acc on the 12-link test split):*
+
+| training episodes (12-link) | 10 | 40 | 170 | 840 |
+|---|---|---|---|---|
+| 16-link model, zero-shot | 0.754 | 0.754 | 0.754 | 0.754 |
+| 16-link model, fine-tuned | 0.646 | 0.700 | **0.777** | **0.825** |
+| somato_pool from scratch | 0.383 | 0.510 | 0.700 | 0.813 |
+| flat GRU from scratch | 0.345 | 0.489 | 0.656 | 0.743 |
+
+*Evidence:*
+* Transfer is worth a lot of data: the 16-link model with no 12-link data matches scratch training with somewhere
+  between 170 and 840 episodes.
+* Fine-tuning with 10–40 episodes lowers accuracy below zero-shot (−11 / −5 points). The first validation comes after
+  250 steps, by which time the pretrained solution is gone, and the protocol cannot fall back to the initial weights.
+* With 170 episodes fine-tuning gains 2.3 points over zero-shot and leads scratch training by 7.7. With 840 it leads
+  scratch by 1.2.
+* The structured model from scratch beats the flat GRU from scratch at every size (+3.8 to +7.0), consistent with
+  F-22 on the 16-link robot.
+
+*Caveats:*
+* One seed; the 10- and 40-episode points are noisy.
+* The fine-tuning recipe was not tuned (lr 3e-4, all weights, protocol v5's 6,000 steps on 10 episodes).
+
+*Implication:*
+* A structured encoder trained on one robot is a strong starting point for another (H-2d): days of data collection
+  saved.
+* Fine-tuning needs a safer recipe:
+  * validate before the first update, so the pretrained weights are a candidate;
+  * a lower lr or fewer steps;
+  * freezing stage 1 (the receptors should transfer unchanged; stage-wise training also bears on H-10).
+* E-10c tests this.
+
+**F-36. E-9b, held-out compliance range: classification barely suffers (−1 point), but the sinkage error doubles for
+every model; structure does not extrapolate better here either.** *Why:* the compliance counterpart of E-9 (H-2b,
+H-11): does the sinkage estimate extrapolate to softer ground than trained? *Setup:* E-9 (`v1_e9_holdout.yaml`, E-5
+tasks and models, 3 seeds) with `holdout.param = contact_width`. The softest 30 % of each class is held out: fresh snow
+38–50 mm transition width, packed snow 5.9–8 mm, ice and concrete ~0.9–2 mm.
+
+*Result (mean ± std over seeds):*
+
+| model | acc in range → held out | friction MAE in range → held out | sinkage MAE in range → held out (mm) |
+|---|---|---|---|
+| somato_pool | **0.787 → 0.780** | 0.070 → 0.067 | **0.25** → 0.50 |
+| receptor_only | 0.775 → 0.769 | 0.072 → 0.069 | 0.36 → 0.60 |
+| transformer | 0.721 → 0.704 | 0.075 → 0.071 | 0.29 → 0.52 |
+| flat_gru | 0.674 → 0.664 | 0.072 → 0.071 | 0.28 → **0.47** |
+
+*Evidence:*
+* Softer-than-trained variants are still classified correctly (−0.6 to −1.7 points). Softness extremes stay within
+  their class's character, unlike friction extremes (F-29: −20 points).
+* The sinkage error doubles for every model on the held-out range, with no structural advantage in extrapolation:
+  somato_pool is best in range, the flat GRU marginally best held out.
+* Friction error is unaffected, as expected (the held-out episodes differ in compliance only).
+
+*Caveats:* one holdout fraction; no per-episode bias analysis (presumably underestimation of the deepest sinkage).
+
+*Implication:* together with F-25 and F-29, physical property estimates degrade about 2× beyond the trained range for
+every architecture. Structure helps estimation in distribution (sinkage especially), not extrapolation. To widen the
+range, train on wider ranges (domain randomization of terrain, as for the sensor in F-26); no architecture here
+extrapolates.
+
 **F-35. E-18a, streaming without retraining works: with the state carried over whole episodes, window-trained models
 keep improving past their 0.5 s training window, by 3–5 points over window mode after 1 s; the structured models lose
 1–2 points again at 2–3 s.** *Why:* streaming is the cheap online mode (somato_pool 2.7 ms per step on a CPU vs 34 ms

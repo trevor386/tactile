@@ -7,7 +7,7 @@ import copy
 import json
 import math
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +50,8 @@ class TrainConfig:
     # Start from the weights (and input normalizers) of a run_experiment checkpoint of the same architecture
     # (fine-tuning, e.g. on another robot: E-10b). Empty = random initialization.
     init_checkpoint: str = ""
+    # Parameter-name prefixes kept fixed during training, e.g. ["temporal"] (stage 1 of the hierarchical model).
+    freeze: list[str] = field(default_factory=list)
     log_every: int = 0  # steps between progress prints (0 = once per epoch)
     max_steps_per_epoch: int = 0  # 0 = full epoch
 
@@ -142,7 +144,11 @@ class Trainer:
         epochs = max(cfg.epochs, math.ceil(cfg.min_steps / max(1, steps_per_epoch)))
         total_steps = max(1, epochs * steps_per_epoch)
         warmup = max(1, int(cfg.warmup_epochs * steps_per_epoch))
-        opt = torch.optim.AdamW(self.model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+        for name, p in self.model.named_parameters():  # frozen modules (fine-tuning, stage-wise training)
+            if any(name.startswith(prefix) for prefix in cfg.freeze):
+                p.requires_grad_(False)
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        opt = torch.optim.AdamW(params, lr=cfg.lr, weight_decay=cfg.weight_decay)
         sched = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda s: min(1.0, (s + 1) / warmup) * 0.5 * (1 + math.cos(math.pi * min(1.0, s / total_steps)))
         )
@@ -170,6 +176,8 @@ class Trainer:
             self.model.train()
             return bool(cfg.patience and best["bad"] >= cfg.patience)
 
+        if cfg.init_checkpoint:  # the starting weights are a candidate too (fine-tuning must not end below them)
+            checkpoint(-1)
         stop = False
         for epoch in range(epochs):
             self.model.train()
