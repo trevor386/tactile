@@ -1,0 +1,18 @@
+# E-25 (F-39 follow-up): is stage 1's benefit architectural? F-39 found that an untrained (random-weight) stage 1 already
+# makes the true pressure linearly readable. Train with stage 1 frozen at its random initialization (stages 2-3 and the
+# projection train as usual) and compare with full training, on the new base (randomized FSR, protocol v5), 3 seeds.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e25_random_stage1.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e25_random_stage1
+fractions: [0.1, 1.0]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  somato_pool: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  somato_pool_random1: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001, freeze: [temporal]}}
+  receptor_random1:
+    model: {architecture: hierarchical, dim: 104, fusion: segregated, brain_stride: 5,
+            temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}},
+            spatial: {type: none, num_layers: 2}, heads: {terrain: {type: global, pool: meanmax, hidden: 128}}}
+    train: {lr: 0.001, freeze: [temporal]}

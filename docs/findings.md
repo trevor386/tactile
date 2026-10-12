@@ -13,6 +13,58 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-39. E-24, what the stages encode: stage 1's per-taxel features make the true pressure more linearly readable than
+the raw FSR history (R² 0.63 vs 0.52 in contact), and even untrained (random-weight) stage 1 does so (0.65); training
+for terrain adds a little link-level contact and slip information and gives up some per-taxel detail. Link slip is
+barely encoded anywhere.** *Why:* the user's direction (2026-10-11) to learn what the stages can do. *Setup:*
+* `scripts/analysis/stage_probes.py`: linear probes (ridge, strength chosen on a hold-out) fitted on half of the test
+  episodes, R² on the other half;
+* fixed FSR v1 readings; features at the last step of each window;
+* E-21 somato_pool and receptor_only, 3 seeds, plus the same models with re-initialized weights (input statistics
+  kept; seed 0);
+* per taxel: true normal pressure, true shear (an FSR does not sense it), link slip;
+* per link (mean and max of the features over its taxels): contact, slip speed, normal force.
+
+*Result (R², mean over seeds; std ≤ 0.03):*
+
+| features | pressure, all | pressure, in contact | shear, in contact | link contact | link slip | link force |
+|---|---|---|---|---|---|---|
+| raw FSR, last step (10) | 0.61 | 0.52 | 0.43 | 0.39 | 0.00 | 0.65 |
+| raw FSR, whole window (250) | 0.62 | 0.52 | 0.42 | 0.39 | 0.00 | 0.65 |
+| somato_pool stage 1, trained | 0.69 | 0.63 | 0.47 | 0.75 | 0.10 | 0.71 |
+| somato_pool stage 2, trained | 0.60 | 0.56 | 0.42 | 0.71 | **0.12** | 0.67 |
+| receptor_only stage 1, trained | 0.71 | 0.63 | 0.48 | **0.76** | 0.09 | 0.71 |
+| somato_pool stage 1, untrained | 0.72 | 0.65 | 0.49 | 0.73 | 0.04 | 0.72 |
+| receptor_only stage 1, untrained | **0.73** | **0.65** | **0.49** | 0.74 | 0.04 | **0.72** |
+
+*Evidence:*
+* A linear filter of a taxel's raw history (250 samples) is no better than its last 10 samples. The FSR's hysteresis
+  and saturation are nonlinear, so linear filtering cannot undo them.
+* Stage 1's nonlinear temporal encoder (shared by all taxels) recovers the true pressure much better, trained or not.
+  With random weights it is a random nonlinear feature bank over each taxel's history (a reservoir), which already
+  linearizes the sensor.
+* Training for terrain classification slightly *reduces* per-taxel pressure and shear information (0.65 → 0.63;
+  stage 2 to 0.56). It slightly increases link contact (+0.02) and link slip (0.04 → 0.10–0.12), the most of any
+  features in stage 2.
+* Link slip speed is barely linearly decodable from any features (≤ 0.12). An FSR measures normal force only; slip is
+  better sensed through shear (E-12: the shear skin is +15 points).
+* Shear is readable to R² ~0.4–0.5 from the normal pressure alone (in sliding contact shear ≈ friction × pressure),
+  and stage 1 adds little.
+
+*Caveats:*
+* Linear probes only.
+* Feature dimension differs (10 / 250 / 64 / 104).
+* One evaluation sensor (fixed FSR); E-21 models trained with randomized FSRs.
+
+*Implication:*
+* Stage 1's value is partly structural: a shared nonlinear temporal filter over each taxel's history turns a
+  hysteretic, saturating sensor into features from which physical quantities are linearly readable, before any
+  training. This fits F-22: stage 1 carries most of the data-efficiency advantage.
+* Natural follow-up, **E-25**: train with stage 1 frozen at random weights. If the terrain accuracy stays close, the
+  receptor stage's benefit is architectural (random features suffice).
+* For SSL (T-11, E-14), a pretext task that rewards physical quantities (e.g. reconstructing neighbours' pressure)
+  could keep the per-taxel detail that terrain training discards.
+
 **F-38. E-10c, safe fine-tuning: validating the starting weights before the first update prevents the F-37 collapse;
 fine-tuning gains only from ~170 episodes; freezing stages does not help.** *Why:* F-37 found naive fine-tuning on
 10–40 episodes fell below zero-shot. *Setup:*

@@ -9,14 +9,14 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-12 07:50)
+## RESUME HERE (state as of 2026-10-12 08:00)
 
-* **Running in jobq:** `e24_probes` → `e24_probes_untrained` (E-24, from 07:40). Write F-39.
+* **Running in jobq:** `e25_random_stage1` (E-25, ~6.5 h from 07:45). Write F-40.
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
   runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34), E-18a streaming
-  (F-35), E-9b compliance holdout (F-36), E-10b 12-link transfer (F-37), E-10c fine-tuning recipes (F-38).
+  (F-35), E-9b compliance holdout (F-36), E-10b 12-link transfer (F-37), E-10c fine-tuning recipes (F-38), E-24 stage probes (F-39).
 * **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
   locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
   pursued.
@@ -50,7 +50,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help out of distribution (F-25; F-29 and F-36: friction and sinkage errors double beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
-| H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines) |
+| H-14 | On terrain, most of the benefit comes from stage 1: one receptor encoder shared by all sensors of a modality, plus pooling. | **supported** (F-22: receptor_only within 1–2 points of somato_pool, 7–8 above the baselines). F-39: even an untrained stage 1 linearizes the FSR (true pressure R² 0.65 vs 0.52 raw); E-25 tests whether a frozen random stage 1 suffices for terrain. |
 
 ## 2. Experiment queue (ordered)
 
@@ -59,7 +59,7 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-24 | What stages 1 and 2 encode (user direction: learn the stages' capabilities) | Linear probes (ridge, strength chosen on a hold-out) from per-taxel features to the true pressure (through the FSR's hysteresis), shear (not sensed by an FSR) and link slip; link-level probes (mean/max over a link's taxels) to the link's contact, slip and normal force. Feature sets: raw FSR now / over the window, stage-1 latent, stage-2 latent; E-21 somato_pool and receptor_only, 3 seeds, plus untrained (random-weight) controls | `scripts/analysis/stage_probes.py` | ~1 h | **running** (jobq `e24_probes`, `e24_probes_untrained`) |
+| 1 | E-25 | Is stage 1's benefit architectural? (F-39 follow-up) | Train with stage 1 frozen at random initialization (stages 2–3 train) vs full training: somato_pool, somato_pool with random stage 1, receptor_only with random stage 1; `terrain_v1b`, 10 % / 100 %, 3 seeds | `configs/experiments/v1_e25_random_stage1.yaml` | ~6.5 h | **running** (jobq from 07:45) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
@@ -69,6 +69,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-24, stage probes (F-39).
 * E-10c, safe fine-tuning recipes (F-38).
 * E-10b, transfer to a 12-link robot (F-37).
 * E-9b, held-out compliance range (F-36).
