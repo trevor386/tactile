@@ -1,0 +1,49 @@
+# T-11 / E-14: self-supervised pretraining of stages 1-2 (no labels). Next-step prediction: from every taxel's stage-2
+# features at a predicted step, forecast its FSR samples in the next 20 ms (10 samples). The receptors must learn the
+# contact dynamics (loading under compliance, texture vibration, sliding) without terrain labels (F-40: trained
+# receptors are worth 8-11 points). Same data, sensors and protocol as terrain_v1b; the training split's episodes are
+# used without their labels.
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_v1b.yaml
+name: ssl_somato_pool
+dataset: datasets/mjlab_v1_2400
+output_dir: runs/v1/ssl
+sensors: configs/sensors/fsr_v1_random.yaml
+model:
+  architecture: hierarchical
+  dim: 64
+  fusion: segregated
+  brain_stride: 5
+  temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}}
+  spatial:
+    type: kernel3d
+    num_layers: 2
+    edge_features: rel_pos_local
+    length_scale: 0.045
+    graph: {k: 24, radius: 0.045, dynamic: true}
+    params: {num_basis: 16, kernel_hidden: 64, aggregation: mean}
+  spatial_overrides:
+    joint: {num_layers: 1, length_scale: 0.15, graph: {k: 5, radius: 0.15}}
+    imu: {type: none, num_layers: 1}
+  heads:
+    ssl: {type: node, out_dim: 10, hidden: 128}   # 10 FSR samples per 20 ms latent step, one channel
+tasks:
+  ssl: {type: next_step, group: tactile}
+window: 25
+stride: 10
+eval_stride: 25
+split: [0.7, 0.15, 0.15]
+train:
+  epochs: 15
+  min_steps: 6000
+  eval_every: 250
+  patience: 0
+  batch_size: 32
+  lr: 0.001
+  amp: bf16
+  num_workers: 4
+  output_steps: 4
+  select_metric: -ssl/nmse
+augment:
+  random_yaw: true
+  random_translation: 1.0
+  sensor_dropout: 0.05

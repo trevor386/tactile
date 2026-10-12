@@ -9,15 +9,15 @@ Simulators: `docs/mjlab.md`, `docs/isaac_sim.md`. Literature: `docs/references/`
 IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status words: *running*, *next*, *queued*,
 *blocked (by X)*, *done (date, finding)*, *dropped (why)*.
 
-## RESUME HERE (state as of 2026-10-12 08:00)
+## RESUME HERE (state as of 2026-10-12 18:15)
 
+* **Running in jobq** (~9 h from 17:50): `e14_pretrain` (SSL next-step pretraining, `runs/v1/ssl`) → `e14_ssl`
+  (E-14 fine-tuning vs scratch, `runs/v1/e14_ssl`). Write F-42. SSL was started without waiting for the user's pick
+  (it needs no permission and is on the plan); stop it if the user prefers another item first.
 * **Done:** v5 3-seed reference (F-41): somato_pool 0.615 / 0.773, receptor_only 0.592 / 0.749, transformer
   0.537 / 0.720, flat_gru 0.525 / 0.703 at 10 % / 100 %.
-* **In progress (no user decision needed):** T-11 design and implementation of SSL pretraining (self-supervised, no
-  labels), so E-14 can run as soon as the user picks it.
 * **Awaiting the user:**
-  * which big item next: T-11/E-14 (SSL pretraining of stages 1–2), T-10/E-8 (sim-to-sim via Isaac) or E-11 (more
-    data; needs old datasets deleted, T-18);
+  * priority after E-14: T-10/E-8 (sim-to-sim via Isaac) or E-11 (more data; needs old datasets deleted, T-18);
   * Isaac now stops at the Omniverse EULA prompt (`isaac_check`, 2026-10-12). Accepting it (or setting
     `OMNI_KIT_ACCEPT_EULA=YES`) needs the user's OK.
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
@@ -68,7 +68,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
+| 1 | E-14 | SSL pretraining (H-10) | First objective: next-step prediction of every taxel's FSR change over the next 20 ms from its stage-2 features (no labels, the 1,680 training episodes); then fine-tune with 42 / 170 / 420 labelled episodes vs from scratch, and with the pretrained stage 1 frozen (vs F-40's random frozen); `terrain_v1b`, 3 seeds. Other objectives (masked reconstruction, cross-modal) later if this shows promise | `configs/experiments/ssl_pretrain_v1b.yaml`, `v1_e14_ssl.yaml` | ~9 h | **running** (jobq `e14_pretrain`, `e14_ssl`) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
@@ -108,7 +108,7 @@ very long runs until earlier steps are sound.
 | T-21 | Extend `scripts/analysis/ood_eval.py` to property estimates (error vs the OOD set's true friction and measured sinkage) for models with a property head. | E-5 / E-7 | done (2026-10-10; tested on a smoke checkpoint) |
 | T-22 | Sensor-model randomization: let sensor params be ranges drawn per sample/episode during training (the FSR already draws per taxel); a randomized `configs/sensors/fsr_v1_random.yaml`. | E-21 | done (2026-10-10; FSR `randomize` option, per-window draws, per-sample sub-ranges for the per-taxel params; unit test) |
 | T-10 | Isaac parity for sim-to-sim: PhysX compliant contact per env from the same catalog, an Isaac v1 collection, a paired comparison. First check that Isaac runs on driver 580. | E-8 | queued |
-| T-11 | SSL objectives (masked sensor prediction, reconstruction, next-step, cross-modal touch ↔ proprioception); trainer support for pretraining, freezing stages, task-specific last stage only. | E-14, E-15 | queued |
+| T-11 | SSL objectives (masked sensor prediction, reconstruction, next-step, cross-modal touch ↔ proprioception); trainer support for pretraining, freezing stages, task-specific last stage only. | E-14, E-15 | partly done (2026-10-12): `node` head, `next_step` task (target = change from the last seen sample; the raw next step was 95 % predictable by persistence), loading across different heads, `train.freeze`; masked reconstruction and cross-modal still to do |
 | T-13 | Uneven terrain: mjlab heightfields per env; the taxel contact model must query the terrain height under each taxel (it assumes a plane). | E-16 | queued |
 | T-14 | Realism, by expected impact: (a) snow plasticity and ploughing/berm drag; (b) static friction and stick-slip; (c) temperature effects on the sensor; (d) taxel crosstalk and load sharing through the skin. | H-3 | queued |
 | T-15 | Literature review of the somatosensory system (SA/RA receptors, dorsal-column pathways, somatotopy, cortical integration) for architecture ideas. | E-17 | queued |

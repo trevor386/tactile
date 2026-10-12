@@ -83,6 +83,49 @@ class PerBodyRegressionTask(Task):
         return {"mae": (pred - target).abs().mean((1, 2))}
 
 
+@TASKS.register("next_step")
+class NextStepPrediction(Task):
+    """Self-supervised pretext task (T-11, E-14): from each sensor's node features at a predicted step, forecast its
+    readings in the next latent step (all ``S`` samples and channels). No labels are used. To forecast how contact
+    evolves (loading under compliance, texture vibration, sliding), the receptors must learn the dynamics that terrain
+    recognition also relies on (F-40). Stage 1 is causal across steps, so the target is never in the input. With
+    ``delta`` (default) the target is the change from the current step's last sample: repeating the present reading
+    already explains ~95 % of the next 20 ms, which would leave little to learn. Loss: MSE over live sensors divided by
+    the target variance (about 1 − R^2); metric ``nmse`` per window."""
+
+    def __init__(self, name: str, group: str = "tactile", head: str | None = None, weight: float = 1.0,
+                 delta: bool = True):
+        super().__init__(name, head, weight)
+        self.group, self.delta = group, delta
+
+    def _pairs(self, outputs, batch):
+        steps = outputs["steps"][0].long()
+        x = batch.readings[self.group]  # [B, L, S, Ng, C]
+        keep = steps + 1 < x.shape[1]
+        sl = batch.info.slices[self.group]
+        pred = outputs[self.head][:, keep][:, :, sl].float()  # [B, k, Ng, S*C]
+        nxt = x[:, steps[keep] + 1]  # [B, k, S, Ng, C]
+        if self.delta:
+            nxt = nxt - x[:, steps[keep], -1:]  # change from the last sample the model has seen
+        target = nxt.permute(0, 1, 3, 2, 4).flatten(3).float()  # [B, k, Ng, S*C]
+        live = (torch.ones(pred.shape[0], pred.shape[2], dtype=torch.bool, device=pred.device)
+                if batch.node_mask is None else batch.node_mask[:, sl])
+        return pred, target, live[:, None, :, None].to(pred.dtype)
+
+    def _sq_error(self, outputs, batch):
+        pred, target, w = self._pairs(outputs, batch)
+        var = target[w.expand_as(target) > 0].var().clamp_min(1e-8)
+        return (pred - target).pow(2) * w / var, w
+
+    def loss(self, outputs, batch):
+        se, w = self._sq_error(outputs, batch)
+        return se.sum() / (w.expand_as(se).sum()).clamp_min(1)
+
+    def metrics(self, outputs, batch):
+        se, w = self._sq_error(outputs, batch)
+        return {"nmse": se.sum((1, 2, 3)) / w.expand_as(se).sum((1, 2, 3)).clamp_min(1)}
+
+
 @TASKS.register("property_regression")
 class PropertyRegressionTask(Task):
     """Window-level regression of physical terrain properties (episode-level labels ``param/<target>``).

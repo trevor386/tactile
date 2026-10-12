@@ -33,7 +33,7 @@ HEADS: Registry[nn.Module] = Registry("head")
 
 @dataclass
 class HeadConfig:
-    type: str = "global"  # "global" | "per_body"
+    type: str = "global"  # "global" | "per_body" | "brain" | "node"
     out_dim: int = 5
     pool: str = "cluster_attention"  # mean | max | meanmax | attention | cluster_attention
     hidden: int = 128
@@ -264,6 +264,22 @@ class PerBodyHead(nn.Module):
         mask = None if node_mask is None else node_mask[:, None].expand(B, L, N).reshape(B * L, N)
         mean, mx, _ = cluster_reduce(h.reshape(B * L, N, D), info.cluster_id, info.num_clusters, mask)
         return self.out(torch.cat([mean, mx], -1)).view(B, L, info.num_clusters, -1), {}
+
+
+@HEADS.register("node")
+class NodeHead(nn.Module):
+    """One prediction per sensor and step from its own stage-2 features (self-supervised pretext tasks, T-11).
+    Output ``[B, L, N, out]``."""
+
+    def __init__(self, dim: int, cfg: HeadConfig):
+        super().__init__()
+        self.out = mlp(dim, cfg.hidden, cfg.out_dim, layers=2, dropout=cfg.dropout)
+
+    def init_state(self, batch: int, device) -> dict:
+        return {}
+
+    def forward(self, h, pos, info, node_mask, state=None):
+        return self.out(h), {}
 
 
 def build_head(dim: int, cfg: HeadConfig) -> nn.Module:

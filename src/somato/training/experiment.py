@@ -177,8 +177,15 @@ def run_experiment(cfg: ExperimentConfig, store: EpisodeStore | None = None, ver
                                   getattr(model_cfg, "num_clusters", None))
     model = build_model(model_cfg, groups, info)
     if cfg.train.init_checkpoint:  # fine-tuning: same architecture, any sensor layout for the hierarchical models
-        init = torch.load(cfg.train.init_checkpoint, map_location="cpu", weights_only=False)
-        model.load_state_dict(init["model_state"])
+        init = torch.load(cfg.train.init_checkpoint, map_location="cpu", weights_only=False)["model_state"]
+        own = model.state_dict()
+        # Weights with the same name and shape are loaded; others (e.g. a pretraining head) stay as initialized.
+        load = {k: v for k, v in init.items() if k in own and own[k].shape == v.shape}
+        model.load_state_dict(load, strict=False)
+        if verbose:
+            skipped = sorted({".".join(k.split(".")[:2]) for k in own if k not in load})
+            print(f"[{cfg.name}] init from {cfg.train.init_checkpoint}: {len(load)}/{len(own)} tensors loaded"
+                  + (f"; kept initial: {skipped}" if skipped else ""))
     device = resolve_device(cfg.train.device)
     preparer = BatchPreparer(store.layout, info, suite, device, cfg.augment)
     run_dir = Path(cfg.output_dir) / cfg.name

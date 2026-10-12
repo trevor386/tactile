@@ -1,0 +1,22 @@
+# E-14 (H-10): does self-supervised pretraining of stages 1-2 (configs/experiments/ssl_pretrain_v1b.yaml, next-step
+# prediction on the 1,680 training episodes without labels) improve data efficiency? Fine-tune with 42 / 170 / 420
+# labelled episodes and compare with training from scratch; also with stage 1 frozen at its pretrained weights
+# (cf. F-40: frozen at random weights, 0.536 / 0.663 at 10 % / 100 %). terrain_v1b (randomized FSR, protocol v5),
+# 3 seeds. The pretrained input statistics are kept (fitted on the unlabelled training episodes).
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_v1b.yaml
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14_ssl.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14_ssl
+fractions: [0.025, 0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  somato_scratch: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  somato_ssl:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_somato_pool/model.pt}
+  somato_ssl_frozen1:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, freeze: [temporal],
+            init_checkpoint: runs/v1/ssl/ssl_somato_pool/model.pt}

@@ -156,6 +156,27 @@ def test_finetune_from_checkpoint(tmp_path, dataset_dir, store):
     assert abs(a["test/terrain/acc_last"] - b["test/terrain/acc_last"]) < 1e-6
     assert abs(a["test/loss"] - b["test/loss"]) < 1e-5
 
+def test_ssl_next_step_pretraining_and_finetune(tmp_path, dataset_dir, store):
+    """Self-supervised next-step prediction trains without labels; a terrain model then starts from its stages 1-2
+    (weights with matching names and shapes), while the pretraining head is left out."""
+    S = 5  # tactile samples per latent step in the mock collection (250 Hz / 50 Hz), one channel (ideal, no shear)
+    ssl_model = {**TINY_MODEL, "heads": {"ssl": {"type": "node", "out_dim": S, "hidden": 16}}}
+    kw = dict(dataset=str(dataset_dir), output_dir=str(tmp_path), sensors=IDEAL, window=10, stride=5,
+              eval_stride=10, split=(1 / 3, 1 / 3, 1 / 3))
+    pre = run_experiment(ExperimentConfig(name="ssl", model=ssl_model, tasks={"ssl": {"type": "next_step"}},
+                                          train=TrainConfig(epochs=2, batch_size=4, output_steps=2,
+                                                            select_metric="-ssl/nmse"), **kw), store, verbose=False)
+    assert 0.0 <= pre["test/ssl/nmse"] < 10.0
+    tune = TrainConfig(epochs=0, batch_size=4, output_steps=2, fit_normalizers=False,
+                       init_checkpoint=str(tmp_path / "ssl" / "model.pt"))  # no updates: the loaded weights are kept
+    run_experiment(ExperimentConfig(name="ft", model=TINY_MODEL, train=tune, **kw), store, verbose=False)
+    a = torch.load(tmp_path / "ssl" / "model.pt", weights_only=False)["model_state"]
+    b = torch.load(tmp_path / "ft" / "model.pt", weights_only=False)["model_state"]
+    assert not any(k.startswith("heads.ssl") for k in b) and any(k.startswith("heads.terrain") for k in b)
+    shared = [k for k in a if k in b and k.startswith(("temporal", "spatial"))]
+    assert shared and all(torch.equal(a[k], b[k]) for k in shared)
+
+
 def test_trainer_freeze(store):
     """``freeze`` keeps the named modules fixed while the rest trains."""
     from somato.models.builder import build_model, parse_model_config
