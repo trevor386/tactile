@@ -13,6 +13,42 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-38. E-10c, safe fine-tuning: validating the starting weights before the first update prevents the F-37 collapse;
+fine-tuning gains only from ~170 episodes; freezing stages does not help.** *Why:* F-37 found naive fine-tuning on
+10–40 episodes fell below zero-shot. *Setup:*
+* `configs/experiments/v1_e10c_finetune_recipes.yaml`: the E-21 16-link somato_pool, 12-link data, ~10 / 40 / 170
+  episodes, 3 seeds (different subsets per seed), 1,500-step budget, input statistics kept;
+* the trainer now validates the starting weights when `init_checkpoint` is set, so they can be kept;
+* new `train.freeze` (parameter-name prefixes).
+
+*Result (test acc, mean ± std over seeds; zero-shot 0.754, E-10b):*
+
+| recipe | 10 episodes | 40 | 170 |
+|---|---|---|---|
+| all weights, lr 1e-4 | 0.760 ± 0.003 (initial weights kept) | 0.753 ± 0.002 | **0.781 ± 0.006** |
+| stage 1 frozen, lr 3e-4 | 0.760 ± 0.003 (initial kept) | 0.745 ± 0.011 | 0.777 ± 0.009 |
+| stages 1–2 frozen, lr 3e-4 | 0.760 ± 0.003 (initial kept) | 0.749 ± 0.009 | 0.772 ± 0.007 |
+| (E-10b, seed 0) naive fine-tuning / from scratch | 0.646 / 0.383 | 0.700 / 0.510 | 0.777 / 0.700 |
+
+*Evidence:*
+* With 10 episodes every recipe keeps the starting weights (best step 0 in all 9 runs), so the collapse is gone.
+* With 40 episodes fine-tuning cannot beat zero-shot (validation on a small held-out set picks a slightly worse
+  model).
+* With 170 episodes all recipes gain 2–3 points over zero-shot and 7–8 over scratch.
+* Freezing stage 1 (receptors) or stages 1–2 is no better than fine-tuning everything at a low lr, slightly worse at
+  170. The new robot's differences are not confined to stage 3.
+
+*Caveats:*
+* One source model (seed 0) and one target robot.
+* The 12-link robot differs in body dynamics as well as skin layout.
+* The 40-episode differences are within noise.
+
+*Implication:*
+* Recipe for a new robot: use the structured model as is; fine-tune all weights at lr 1e-4, validating the starting
+  weights, once ~150+ episodes exist.
+* H-10 (stage-wise training): freezing trained stages is not a free win for transfer. SSL-style stage-wise training is
+  still untested (T-11).
+
 **F-37. E-10b, transfer to a new robot: the 16-link model used as is on the 12-link robot (0.754) beats training from
 scratch until ~170+ episodes; naive fine-tuning on 10–40 episodes makes it worse; with 840 episodes fine-tuning edges
 out scratch training.** *Why:* how much data does a new robot need when starting from the structured model of another
