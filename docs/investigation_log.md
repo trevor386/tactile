@@ -11,8 +11,10 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 08:00)
 
-* **Running in jobq:** `v1b_reference_seeds` (seeds 1–2 of receptor_only / flat_gru / transformer on `terrain_v1b`,
-  ~2.5 h from 14:40). With E-12 (seed 0) and E-25 (somato_pool, 3 seeds) this gives the 3-seed v5 reference.
+* **Done:** v5 3-seed reference (F-41): somato_pool 0.615 / 0.773, receptor_only 0.592 / 0.749, transformer
+  0.537 / 0.720, flat_gru 0.525 / 0.703 at 10 % / 100 %.
+* **In progress (no user decision needed):** T-11 design and implementation of SSL pretraining (self-supervised, no
+  labels), so E-14 can run as soon as the user picks it.
 * **Awaiting the user:**
   * which big item next: T-11/E-14 (SSL pretraining of stages 1–2), T-10/E-8 (sim-to-sim via Isaac) or E-11 (more
     data; needs old datasets deleted, T-18);

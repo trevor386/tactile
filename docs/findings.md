@@ -13,6 +13,31 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-41. v5 reference (randomized FSR, protocol v5, 3 seeds): the structured lead holds and slightly grows over E-2.**
+*Why:* a 3-seed reference for studies on the new defaults (`terrain_v1b`). *Setup:* seed 0 from E-12
+(`runs/v1/e12_fsr_random`), seeds 1–2 from `configs/experiments/v1b_reference_seeds.yaml` (receptor_only, flat_gru,
+transformer at E-12's matched widths), somato_pool's 3 seeds from E-25.
+
+*Result (test acc, mean ± std; E-2 = fixed FSR, protocol v4):*
+
+| model | 170 episodes | 1,680 episodes |
+|---|---|---|
+| somato_pool | **0.615 ± 0.015** (E-2 0.606) | **0.773 ± 0.005** (0.778) |
+| receptor_only | 0.592 ± 0.009 (0.597) | 0.749 ± 0.003 (0.759) |
+| transformer | 0.537 ± 0.021 (0.548) | 0.720 ± 0.009 (0.734) |
+| flat_gru | 0.525 ± 0.015 (0.531) | 0.703 ± 0.007 (0.684) |
+
+*Evidence:*
+* Lead of somato_pool over the best baseline: +7.8 / +5.3 points (E-2: +5.8 / +4.4).
+* Randomized-sensor training costs the transformer 1–1.4 points and the structured models ≤ 1. The flat GRU gains
+  2 at full data; it relied least on the hysteresis signature (F-23).
+* v5's doubled step floor changes nothing at 10 %: v4 already trained ≥ 43 epochs there. E-1b's gains were at 25 %.
+
+*Caveats:* nominal accuracy on randomized test sensors (each study's test split); the E-2 comparison mixes sensor
+model and protocol.
+*Implication:* the main comparison (F-22) holds under the realistic defaults. Use these numbers as the reference for
+v5 studies.
+
 **F-40. E-25, stage 1 must be trained: frozen at random weights it costs 8–11 points; the architecture alone (random
 receptors + trained stages 2–3) still beats the baselines at 10 % but not at full data.** *Why:* F-39 found that an
 untrained stage 1 already makes physical quantities linearly readable. Is the receptor stage's benefit architectural?
