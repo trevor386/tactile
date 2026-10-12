@@ -1,0 +1,25 @@
+# Reference results on the new base (terrain_v1b: randomized FSR, protocol v5) with 3 seeds: seeds 1-2 for the three
+# models that E-12 (configs/experiments/v1_e12_sensor_tech.yaml, runs/v1/e12_fsr_random) ran with seed 0 only, at the
+# widths width matching chose there (receptor_only 104, flat_gru 156, transformer 108; ~430k parameters).
+# somato_pool has 3 seeds from E-25 (runs/v1/e25_random_stage1). Together: the v5 main reference for later studies.
+#   python scripts/data_efficiency.py --config configs/experiments/v1b_reference_seeds.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/v1b_reference_seeds
+fractions: [0.1, 1.0]
+seeds: [1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  receptor_only:
+    model: {architecture: hierarchical, dim: 104, fusion: segregated, brain_stride: 5,
+            temporal: {type: conv_gru, latent_dim: 64, params: {hidden: 64, conv_channels: 32}},
+            spatial: {type: none, num_layers: 2}, heads: {terrain: {type: global, pool: meanmax, hidden: 128}}}
+    train: {lr: 0.001}
+  flat_gru:
+    model: {architecture: flat_recurrent, hidden: 156, chunk_features: stats, kinematics: true,
+            heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}
+  transformer:
+    model: {architecture: transformer, dim: 108, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 4,
+            heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001}

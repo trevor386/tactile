@@ -11,8 +11,13 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 08:00)
 
-* **Nothing running** (14:35). Open choice for the user: next big item T-11/E-14 (SSL), T-10/E-8 (sim-to-sim via
-  Isaac) or E-11 (more data; needs old datasets deleted).
+* **Running in jobq:** `v1b_reference_seeds` (seeds 1–2 of receptor_only / flat_gru / transformer on `terrain_v1b`,
+  ~2.5 h from 14:40). With E-12 (seed 0) and E-25 (somato_pool, 3 seeds) this gives the 3-seed v5 reference.
+* **Awaiting the user:**
+  * which big item next: T-11/E-14 (SSL pretraining of stages 1–2), T-10/E-8 (sim-to-sim via Isaac) or E-11 (more
+    data; needs old datasets deleted, T-18);
+  * Isaac now stops at the Omniverse EULA prompt (`isaac_check`, 2026-10-12). Accepting it (or setting
+    `OMNI_KIT_ACCEPT_EULA=YES`) needs the user's OK.
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
