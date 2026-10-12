@@ -11,12 +11,11 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 00:00)
 
-* **Running in jobq** (~3.5 h from 23:50): `e18a_streaming` → `e9b_holdout_compliance`. Write F-35 (E-18a), F-36
-  (E-9b).
+* **Running in jobq:** `e9b_holdout_compliance` (~3 h from 23:51). Write F-36 (E-9b).
 * **Deferred:** E-11 (4× data) needs ~64 GB of dataset cache; 79 GB free (2026-10-11). Ask the user before deleting
   old datasets (T-18).
 * **Done recently:** E-5 (F-25), E-21 (F-26), E-13b (F-27), E-1b (F-28), E-9 (F-29), E-22 (F-30, fairness), T-23
-  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34).
+  runtime (F-31), E-10 layout (F-32), E-23 compute matching (F-33), E-12 sensor technology (F-34), E-18a streaming (F-35).
 * **User direction (2026-10-11):** keep running experiments on stages 1–2 and their capabilities; no stage-3 or
   locomotion work until much more is learned about the other stages. Real-time concerns are noted (section 4), not
   pursued.
@@ -59,17 +58,17 @@ very long runs until earlier steps are sound.
 
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
-| 1 | E-18a | Streaming without retraining (deployment, F-31) | E-21 checkpoints (window-trained) streamed over whole 3 s test episodes with the state carried: accuracy vs time since reset (0–0.5 / 0.5–1 / 1–2 / 2–3 s) for somato_pool, receptor_only, flat_gru, vs window-mode accuracy. Smoke test: flat GRU 0.62 → 0.73, above its window-mode 0.695 | `scripts/analysis/streaming_eval.py` | ~15 min | queued in jobq (`e18a_streaming`) |
-| 2 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | queued in jobq (`e9b_holdout_compliance`) |
+| 1 | E-9b | Held-out compliance range (H-2b, H-11) | E-9 with `holdout.param = contact_width` (the softest 30 % of each class: fresh snow 38–50 mm transition width, packed snow 5.9–8 mm, ...): does the sinkage estimate extrapolate? `--set base_overrides.holdout.param=contact_width output_dir=runs/v1/e9b_holdout_compliance` | `configs/experiments/v1_e9_holdout.yaml` | ~3 h | **running** (jobq from 23:51) |
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
 | 8 | E-14 | SSL pretraining (H-10) | Masked sensor prediction / reconstruction / cross-modal, then fine-tune at small data | to write | ~6 h | blocked (T-11) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
-| 12 | E-18 | Long-horizon streaming | Accuracy vs time since reset; TBPTT vs sliding window for the v1 models | — | ~2 h | blocked (T-17) |
+| 12 | E-18 | Long-horizon streaming | Part (a) done (F-35: streaming works to 3 s without retraining). Remaining: longer episodes with terrain switches mid-episode; whether TBPTT training (T-17) removes the structured models' small late dip | — | ~2 h | queued (TBPTT part blocked by T-17) |
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-18a, streaming without retraining (F-35).
 * E-12, sensor technology (F-34); seeds if the per-skin stage-2 values matter.
 * E-23, compute-matched flat GRU (F-33).
 * E-10, layout generalization (F-32); fine-tuning on the 12-link robot is a possible follow-up.
@@ -133,7 +132,8 @@ Done tasks are in the commits and in `docs/findings.md`:
   online cost too, so E-23 tests it.
 * **Real-time concerns, noted, not pursued now** (user, 2026-10-11; F-31):
   * on a CPU, window-mode somato_pool (34 ms) and the transformer (129 ms) miss the 20 ms budget; streaming somato
-    (2.7 ms) would fit once E-18 validates it;
+    (2.7 ms) fits and works without retraining up to 3 s, more accurately than window mode (F-35); longer horizons and
+    terrain switches untested (E-18);
   * the robot's actual compute is unknown;
   * the simulator runs at 0.34× real time for one robot (an online demo or hardware-in-the-loop would need a faster
     single-env path).

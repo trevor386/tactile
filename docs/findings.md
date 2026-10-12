@@ -13,6 +13,43 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-35. E-18a, streaming without retraining works: with the state carried over whole episodes, window-trained models
+keep improving past their 0.5 s training window, by 3–5 points over window mode after 1 s; the structured models lose
+1–2 points again at 2–3 s.** *Why:* streaming is the cheap online mode (somato_pool 2.7 ms per step on a CPU vs 34 ms
+in window mode, F-31). Is it usable for models trained only on independent 0.5 s windows? *Setup:*
+* `scripts/analysis/streaming_eval.py`: E-21 full-data checkpoints (randomized-FSR training), 3 seeds;
+* every test episode (150 latent steps, 3 s) in one pass from a fresh state, equal to step-by-step streaming;
+* accuracy per time-since-reset bin, fixed FSR v1;
+* window-mode reference: E-21's nominal robustness accuracy (independent 0.5 s windows).
+
+*Result (mean of 3 seeds):*
+
+| model | window mode | stream 0–0.5 s | 0.5–1 s | 1–2 s | 2–3 s |
+|---|---|---|---|---|---|
+| somato_pool | 0.776 | 0.728 | 0.799 | **0.820** | 0.807 |
+| receptor_only | 0.752 | 0.684 | 0.766 | 0.784 | 0.774 |
+| flat_gru | 0.695 | 0.617 | 0.711 | 0.741 | 0.742 |
+
+*Evidence:*
+* All models are stable beyond their training horizon and better than in window mode: they integrate evidence over
+  more time (+3–5 points at 1–2 s).
+* The first 0.5 s bin is lower than window mode because it averages over steps with less context (from step 5 on),
+  whereas window mode always predicts after 25 steps.
+* somato_pool and receptor_only drop 1–1.3 points from the 1–2 s to the 2–3 s bin (seed 1 most: −2); the flat GRU does
+  not. This is a hint of state drift beyond the trained horizon for the structured models, small at 3 s.
+* The ranking is unchanged in every bin.
+
+*Caveats:*
+* Episodes are only 3 s, so longer horizons (minutes on a robot) are untested and the 2–3 s dip could grow.
+* Terrain is constant within an episode, so streaming here never has to *switch* its estimate. A terrain change
+  mid-episode would test that.
+
+*Implication:*
+* The CPU real-time path (streaming, F-31) is usable for these models without retraining, and is more accurate than
+  window mode. This partly resolves the real-time concern.
+* For long horizons or terrain switches, remaining E-18 work: longer episodes with terrain changes, and whether TBPTT
+  training (T-17) removes the late dip.
+
 **F-34. E-12, sensor technology: the structured lead holds on every skin (5–10 points over the best baseline); the
 skin itself matters far more than the model (an ideal shear-sensing skin is +15 points over the FSR); stage 2 adds 1–4
 points at full data, depending on the skin.** *Why:* H-5 (stage 2's value depends on sensor physics), and whether the
