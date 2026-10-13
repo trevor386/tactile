@@ -1,0 +1,21 @@
+# E-14c (E-14b follow-up), at 170 labelled episodes, 3 seeds:
+# * somato_ssl_h10: SSL forecasting 10 latent steps (200 ms) ahead; pretrained with all 5 brain steps as outputs so
+#   three of them have a target inside the 0.5 s window:
+#     python scripts/train.py --config configs/experiments/ssl_pretrain_v1b.yaml \
+#         --set tasks.ssl.horizon=10 train.output_steps=5 name=ssl_somato_pool_h10
+# * somato_ssl_h5_refit: control for E-14b. The 100 ms SSL weights with the input statistics refitted on the labelled
+#   subset (as scratch training does), so any gain is not from statistics of the unlabelled pool.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14c_ssl_checks.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14c_ssl_checks
+fractions: [0.1]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  somato_ssl_h10:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_somato_pool_h10/model.pt}
+  somato_ssl_h5_refit:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: true, init_checkpoint: runs/v1/ssl/ssl_somato_pool_h5/model.pt}

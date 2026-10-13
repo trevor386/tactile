@@ -13,6 +13,42 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-43. E-14b, SSL forecasting 100 ms ahead gives a real data-efficiency gain: +6.5 points at 170 labelled episodes,
++3.5 at 420 (20 ms: +2.2 / +1.6).** *Why:* F-42's 20 ms target was mostly noise. *Setup:*
+* as E-14 but `next_step` with `horizon: 5` (the FSR change 100 ms ahead): `ssl_pretrain_v1b.yaml --set
+  tasks.ssl.horizon=5`;
+* fine-tuning `configs/experiments/v1_e14b_ssl_h5.yaml`, 3 seeds.
+
+*Result:* pretext test NMSE 0.726 (27 % of the 100 ms change predictable; 20 ms: 18 %). Test acc, mean ± std over
+seeds:
+
+| start | 170 episodes | 420 |
+|---|---|---|
+| from scratch (E-14) | 0.600 ± 0.018 | 0.689 ± 0.016 |
+| SSL 20 ms (E-14) | 0.622 ± 0.016 | 0.705 ± 0.008 |
+| **SSL 100 ms** | **0.665 ± 0.007** | **0.724 ± 0.016** |
+| SSL 100 ms, stage 1 frozen | 0.606 ± 0.015 | 0.665 ± 0.004 |
+
+*Evidence:*
+* +6.5 points at 170 episodes (> 3 seed stds) and +3.5 at 420. 170 labelled episodes with SSL get within 2.4 points
+  of 420 without it.
+* The longer horizon is more predictable and gives better receptors: frozen, 0.606 vs 0.597 (20 ms) vs 0.536 (random).
+  It is also a better initialization: +4.3 points over 20 ms.
+* For context (v5 reference, F-41): the transformer at 170 episodes reaches 0.537, so somato_pool with SSL leads it
+  by 12.8 points.
+
+*Caveats:*
+* The SSL runs keep input statistics fitted on the 1,680 unlabelled episodes, while scratch fits them on the labelled
+  subset. Control running (E-14c: SSL weights with refitted statistics).
+* One pretraining run.
+* The unlabelled pool is the training split itself.
+* The baselines have no SSL counterpart yet, so "SSL helps the structured model more" (H-10) is untested.
+
+*Implication:*
+* Self-supervised forecasting of contact dynamics is a real data-efficiency lever for the receptor architecture, and
+  the horizon matters.
+* E-14c checks the statistics control and a 200 ms horizon; E-14d fills the curve at 42 and 1,680 episodes.
+
 **F-42. E-14, self-supervised next-step pretraining: receptors learned without labels are almost as good as
 supervised ones (frozen: 0.597 vs 0.600 at 10 %, random 0.536), but as an initialization they add only ~2 points.**
 *Why:* H-10. F-40 showed that trained receptors are worth 8–11 points; can they be trained without labels? *Setup:*
