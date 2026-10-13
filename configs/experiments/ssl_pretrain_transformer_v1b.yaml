@@ -1,0 +1,40 @@
+# E-14f: the transformer's counterpart of ssl_pretrain_v1b.yaml (H-10). Same pretext (forecast every taxel's FSR change
+# 100 ms ahead, no labels, the 1,680 training episodes). The transformer is made time-causal for pretraining (a patch
+# token sees its own and earlier patches only), and each (patch, sensor) token forecasts its sensor 100 ms past the
+# end of its patch. Width 108 as in the main comparison. Fine-tuning then uses the standard (non-causal) transformer.
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_transformer_v1b.yaml
+name: ssl_transformer_h5
+dataset: datasets/mjlab_v1_2400
+output_dir: runs/v1/ssl
+sensors: configs/sensors/fsr_v1_random.yaml
+model:
+  architecture: transformer
+  dim: 108
+  layers: 4
+  attn_heads: 4
+  patch_steps: 5
+  pos_bands: 4
+  causal: true
+  heads:
+    ssl: {type: node, out_dim: 10, hidden: 128}
+tasks:
+  ssl: {type: next_step, group: tactile, horizon: 5}
+window: 25
+stride: 10
+eval_stride: 25
+split: [0.7, 0.15, 0.15]
+train:
+  epochs: 15
+  min_steps: 6000
+  eval_every: 250
+  patience: 0
+  batch_size: 32
+  lr: 0.001
+  amp: bf16
+  num_workers: 4
+  output_steps: 4
+  select_metric: -ssl/nmse
+augment:
+  random_yaw: true
+  random_translation: 1.0
+  sensor_dropout: 0.05

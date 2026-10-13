@@ -67,7 +67,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 1 | E-14f | SSL for the transformer (completes H-10's comparison) | A time-causal option for the transformer (patch tokens attend only to earlier or same patches) so it can forecast without seeing the future; per-token node head forecasting each sensor's 100 ms change; then fine-tune the standard transformer from it vs scratch at 170 / 420 episodes, 3 seeds | to write | ~3 h | next |
+| 1 | E-14f | SSL for the transformer (completes H-10's comparison) | Transformer option `causal`: per-token outputs from encoding each patch with earlier patches only (an attention mask over ~2,000 tokens ran out of memory, so prefixes); per-token node head forecasting each sensor's 100 ms change; then fine-tune the standard transformer (width 108) from it vs scratch at 170 / 420 episodes, 3 seeds | `configs/experiments/ssl_pretrain_transformer_v1b.yaml`, `v1_e14f_ssl_transformer.yaml` | ~2.7 h | **running** (jobq `e14f_pretrain_tf` from 18:33, `e14f_ssl_tf`) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |

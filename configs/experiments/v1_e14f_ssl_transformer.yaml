@@ -1,0 +1,21 @@
+# E-14f (H-10): SSL for the transformer (configs/experiments/ssl_pretrain_transformer_v1b.yaml: the same 100 ms
+# forecasting pretext, time-causal per-token outputs) vs the transformer from scratch, at 170 / 420 labelled episodes,
+# 3 seeds, terrain_v1b. Fine-tuning uses the standard (non-causal) transformer at width 108. Compare the gain with the
+# structured model's (F-43: +6.5 / +3.5) and the flat GRU's (F-45: ~0).
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_transformer_v1b.yaml
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14f_ssl_transformer.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14f_ssl_transformer
+fractions: [0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  transformer_scratch:
+    model: {architecture: transformer, dim: 108, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 4,
+            heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001}
+  transformer_ssl_h5:
+    model: {architecture: transformer, dim: 108, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 4,
+            heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_transformer_h5/model.pt}

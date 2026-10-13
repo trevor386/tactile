@@ -150,6 +150,10 @@ class TransformerBaselineConfig:
     # locally, as in the structured model's local-frame kernel and the flat baseline's body poses).
     kin_axes: str = "normal"
     sensor_id: bool = False  # also a learned per-sensor embedding (absolute identity, layout-specific)
+    # Time-causal per-token outputs (SSL pretraining, E-14f): each patch's tokens are encoded with earlier patches
+    # only (not later ones, not the class token), so per-token forecasts never see the future. Class-token outputs
+    # are unaffected.
+    causal: bool = False
     max_sensors: int = 1024
     max_patches: int = 64
     heads: dict[str, Any] = field(default_factory=lambda: {"terrain": HeadConfig()})
@@ -191,11 +195,15 @@ class TransformerBaseline(nn.Module):
                                            batch_first=True, norm_first=True)
         self.encoder = nn.TransformerEncoder(layer, cfg.layers, norm=nn.LayerNorm(D), enable_nested_tensor=False)
         for name, h in cfg.heads.items():
-            if h.type != "global":
-                raise ValueError(f"TransformerBaseline only supports global heads (head '{name}' is '{h.type}')")
+            if h.type not in ("global", "node"):
+                raise ValueError(f"TransformerBaseline supports global and node heads (head '{name}' is '{h.type}')")
+        # global heads read the class token; node heads (SSL) read every (patch, sensor) token
+        self.node_heads = {n for n, h in cfg.heads.items() if h.type == "node"}
         self.heads = nn.ModuleDict({n: mlp(D, h.hidden, h.out_dim, 2, dropout=cfg.dropout)
                                     for n, h in cfg.heads.items()})
         self.ref = reference_node(info)
+
+  # in place: keeps the aligned stride
 
     @torch.no_grad()
     def fit_normalizers(self, readings: dict[str, torch.Tensor]) -> None:
@@ -232,8 +240,20 @@ class TransformerBaseline(nn.Module):
         tok = tok + self.time_embed.weight[:T, None]
         N = tok.shape[2]
         seq = torch.cat([self.cls.expand(B, 1, -1).to(tok.dtype), tok.reshape(B, T * N, -1)], 1)
-        out = self.encoder(seq)[:, :1]  # class token, [B, 1, D]
-        outputs = {n: head(out) for n, head in self.heads.items()}
+        node = None
+        if cfg.causal and self.node_heads:
+            # Time-causal by prefixes: patch p's tokens are encoded together with patches < p only. No attention mask
+            # (a dense mask over ~2,000 tokens forces the materializing kernel: out of memory); ~T/2 full passes.
+            node = torch.stack([self.encoder(tok[:, :p + 1].reshape(B, (p + 1) * N, -1))[:, p * N:]
+                                for p in range(T)], 1)  # [B, T, N, D]
+        global_heads = [n for n in self.heads if n not in self.node_heads]
+        enc = self.encoder(seq) if global_heads or node is None else None
+        out = enc[:, :1] if enc is not None else None  # class token, [B, 1, D]
+        if node is None and self.node_heads:
+            node = enc[:, 1:].reshape(B, T, N, -1)
+        outputs = {n: head(node if n in self.node_heads else out) for n, head in self.heads.items()}
+        if self.node_heads:  # per-token outputs belong to the last latent step of each patch
+            outputs["steps"] = last.expand(B, -1)
         if return_features:
             outputs["features"] = out
         return outputs, {}

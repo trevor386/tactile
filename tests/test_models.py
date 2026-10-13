@@ -344,6 +344,21 @@ def test_baselines_kinematics_masking_and_matching(arch, model, small_desc, smal
     assert abs(count_parameters(matched) - target) / target < 0.15
 
 
+def test_transformer_causal_node_head(small_desc, small_layout, small_info):
+    """With ``causal``, per-token (node head) outputs of a patch do not depend on later patches."""
+    torch.manual_seed(0)
+    cfg = {"architecture": "transformer", "dim": 16, "layers": 2, "attn_heads": 2, "patch_steps": 2, "causal": True,
+           "heads": {"ssl": {"type": "node", "out_dim": 3, "hidden": 16}}}
+    m = build_model(cfg, GROUPS, small_info).eval()
+    batch = make_batch(small_desc, small_layout, small_info, L=6)  # 3 patches
+    out, _ = m(batch)
+    assert out["ssl"].shape[:3] == (2, 3, small_info.num_nodes) and out["steps"][0].tolist() == [1, 3, 5]
+    batch.readings["tactile"][:, 4:] += 5.0  # change the last patch only
+    out2, _ = m(batch)
+    assert torch.allclose(out["ssl"][:, :2], out2["ssl"][:, :2], atol=1e-5)
+    assert not torch.allclose(out["ssl"][:, 2], out2["ssl"][:, 2], atol=1e-5)
+
+
 def test_normalizer_fit(model, small_desc, small_layout, small_info):
     batch = make_batch(small_desc, small_layout, small_info)
     scaled = {g: 50 * x + 3 for g, x in batch.readings.items()}
