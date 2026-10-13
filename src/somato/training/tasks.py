@@ -94,17 +94,17 @@ class NextStepPrediction(Task):
     the target variance (about 1 − R^2); metric ``nmse`` per window."""
 
     def __init__(self, name: str, group: str = "tactile", head: str | None = None, weight: float = 1.0,
-                 delta: bool = True):
+                 delta: bool = True, horizon: int = 1):
         super().__init__(name, head, weight)
-        self.group, self.delta = group, delta
+        self.group, self.delta, self.horizon = group, delta, horizon  # horizon: forecast the step this far ahead
 
     def _pairs(self, outputs, batch):
         steps = outputs["steps"][0].long()
         x = batch.readings[self.group]  # [B, L, S, Ng, C]
-        keep = steps + 1 < x.shape[1]
+        keep = steps + self.horizon < x.shape[1]
         sl = batch.info.slices[self.group]
         pred = outputs[self.head][:, keep][:, :, sl].float()  # [B, k, Ng, S*C]
-        nxt = x[:, steps[keep] + 1]  # [B, k, S, Ng, C]
+        nxt = x[:, steps[keep] + self.horizon]  # [B, k, S, Ng, C]
         if self.delta:
             nxt = nxt - x[:, steps[keep], -1:]  # change from the last sample the model has seen
         target = nxt.permute(0, 1, 3, 2, 4).flatten(3).float()  # [B, k, Ng, S*C]

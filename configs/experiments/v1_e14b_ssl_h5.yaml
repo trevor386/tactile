@@ -1,0 +1,21 @@
+# E-14b (F-42 follow-up): SSL with a longer forecast horizon. Pretraining as ssl_pretrain_v1b.yaml but forecasting the
+# FSR change 5 latent steps (100 ms) ahead instead of 20 ms, where F-42's target was mostly noise (R^2 0.18):
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_v1b.yaml --set tasks.ssl.horizon=5 \
+#       name=ssl_somato_pool_h5
+# Fine-tuning as E-14 at 170 / 420 labelled episodes (where E-14 differed), 3 seeds; compare with E-14's
+# somato_scratch and somato_ssl (runs/v1/e14_ssl).
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14b_ssl_h5.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14b_ssl_h5
+fractions: [0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  somato_ssl_h5:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_somato_pool_h5/model.pt}
+  somato_ssl_h5_frozen1:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, freeze: [temporal],
+            init_checkpoint: runs/v1/ssl/ssl_somato_pool_h5/model.pt}

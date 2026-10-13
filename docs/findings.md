@@ -13,6 +13,46 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-42. E-14, self-supervised next-step pretraining: receptors learned without labels are almost as good as
+supervised ones (frozen: 0.597 vs 0.600 at 10 %, random 0.536), but as an initialization they add only ~2 points.**
+*Why:* H-10. F-40 showed that trained receptors are worth 8–11 points; can they be trained without labels? *Setup:*
+* `configs/experiments/ssl_pretrain_v1b.yaml`: somato_pool with a per-node head;
+* task `next_step`: forecast every taxel's FSR *change* over the next 20 ms (10 samples) from its stage-2 features at a
+  predicted step;
+* the 1,680 training episodes without labels, randomized FSR, protocol v5, best checkpoint by validation NMSE;
+* fine-tuning: `configs/experiments/v1_e14_ssl.yaml`, 42 / 170 / 420 labelled episodes, 3 seeds:
+  * from scratch;
+  * from the SSL weights (input statistics kept);
+  * SSL weights with stage 1 frozen.
+
+*Result:* pretext test NMSE 0.816 (the next 20 ms change is 18 % predictable; it was 95 % predictable without the
+delta). Test acc, mean ± std over seeds:
+
+| start | 42 episodes | 170 | 420 |
+|---|---|---|---|
+| from scratch | 0.491 ± 0.015 | 0.600 ± 0.018 | 0.689 ± 0.016 |
+| SSL, fine-tune all | 0.485 ± 0.018 | **0.622 ± 0.016** | **0.705 ± 0.008** |
+| SSL, stage 1 frozen | 0.462 ± 0.008 | 0.597 ± 0.016 | 0.646 ± 0.011 |
+| (F-40) random stage 1, frozen | — | 0.536 | — |
+
+*Evidence:*
+* Frozen SSL receptors match fully trained ones at 170 episodes (0.597 vs 0.600) and beat frozen random receptors by
+  6 points. Forecasting contact dynamics teaches the receptor stage most of what terrain needs, without labels.
+* At 420 episodes frozen SSL receptors fall 4 points behind (supervised refinement matters with more labels), and at
+  42 they are 3 behind.
+* As an initialization, SSL gains +2.2 / +1.6 points at 170 / 420 episodes (about 1 seed std), nothing at 42.
+
+*Caveats:*
+* One pretext objective with a short horizon, whose target is mostly noise (R² 0.18).
+* The unlabelled pool is the same 1,680 episodes, only 4–40× the labelled sets.
+* Same simulator distribution.
+
+*Implication:*
+* H-10: partly supported. SSL produces useful receptors (the stage-1 capability is learnable without labels), but the
+  data-efficiency gain over supervised training is small with this objective and pool.
+* Next: a longer forecast horizon (100 ms, more dynamics, less noise: E-14b). If that helps, a larger unlabelled pool
+  (more simulation, cheap on a real robot too) and spatial masked reconstruction for stage 2.
+
 **F-41. v5 reference (randomized FSR, protocol v5, 3 seeds): the structured lead holds and slightly grows over E-2.**
 *Why:* a 3-seed reference for studies on the new defaults (`terrain_v1b`). *Setup:* seed 0 from E-12
 (`runs/v1/e12_fsr_random`), seeds 1–2 from `configs/experiments/v1b_reference_seeds.yaml` (receptor_only, flat_gru,
