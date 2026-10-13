@@ -11,8 +11,8 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 18:15)
 
-* **Running in jobq** (~2 h from 17:10): `e14e_pretrain_flat` → `e14e_ssl_flat` (SSL for the flat GRU). Write F-45.
-  SSL for the structured model: F-42–F-44 (+6.5 points at 170 episodes with a 100 ms horizon, control passed).
+* **SSL so far:** the structured model gains +6.5 points at 170 episodes with a 100 ms forecasting pretext (F-43,
+  F-44); the flat GRU gains nothing from the same pretext (F-45). Next: the transformer's counterpart (E-14f).
 * **Done:** v5 3-seed reference (F-41): somato_pool 0.615 / 0.773, receptor_only 0.592 / 0.749, transformer
   0.537 / 0.720, flat_gru 0.525 / 0.703 at 10 % / 100 %.
 * **Awaiting the user:**
@@ -53,7 +53,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without; F-30, fair baselines with full poses and tuned lr: flat GRU 0.57, transformer at chance, both fit the training set) |
-| H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | partly supported (F-42): SSL next-step pretraining learns receptors nearly as good as supervised (frozen 0.597 vs 0.600 at 10 %, random 0.536), but as an initialization it adds only ~2 points. With a 100 ms horizon (F-43): +6.5 points at 170 episodes, +3.5 at 420 (controls running, E-14c). Baselines without SSL so far (E-14e); E-15 open. Freezing trained stages during transfer fine-tuning gave no benefit (F-38). |
+| H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | **supported for SSL vs the flat GRU** (F-42–F-45): forecasting each taxel's FSR change 100 ms ahead (no labels) gives the structured model +6.5 / +3.5 / +1.5 points at 170 / 420 / 1,680 episodes (control passed); the same pretext gives the flat GRU nothing (it solves it through a gait shortcut). Transformer: E-14f. Stage-wise training (E-15) open; freezing trained stages during transfer gave no benefit (F-38). |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help out of distribution (F-25; F-29 and F-36: friction and sinkage errors double beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
@@ -67,7 +67,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 1 | E-14e | SSL for the baselines (H-10: "more for the structured model") | Flat GRU: the same 100 ms forecasting pretext from its global state (node head; outputs at the last 20 steps, 15 with targets), then fine-tuning vs flat from scratch at 170 / 420 episodes, 3 seeds. Note: the flat state sees joints and gait (cross-modal), the structured per-taxel head only touch, so the flat pretext is easier (NMSE 0.58 at step 1,000 vs 0.73 final). Transformer: needs a time-causal mask or a masked-token pretext (not yet) | `configs/experiments/ssl_pretrain_flat_v1b.yaml`, `v1_e14e_ssl_flat.yaml` | ~2 h | **running** (jobq `e14e_pretrain_flat`, `e14e_ssl_flat`) |
+| 1 | E-14f | SSL for the transformer (completes H-10's comparison) | A time-causal option for the transformer (patch tokens attend only to earlier or same patches) so it can forecast without seeing the future; per-token node head forecasting each sensor's 100 ms change; then fine-tune the standard transformer from it vs scratch at 170 / 420 episodes, 3 seeds | to write | ~3 h | next |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
@@ -75,6 +75,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-14e, SSL for the flat GRU (F-45).
 * E-14c/d, SSL checks and curve (F-44).
 * E-14b, SSL with a 100 ms horizon (F-43).
 * E-14, SSL next-step pretraining (F-42).

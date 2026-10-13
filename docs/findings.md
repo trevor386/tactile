@@ -13,6 +13,42 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-45. E-14e, the same SSL does nothing for the flat GRU (+0.4 / −1.2 points), although it solves the pretext far
+better: SSL helps the structured model specifically.** *Why:* H-10's second half (SSL helps the structured model
+*more*). *Setup:*
+* `configs/experiments/ssl_pretrain_flat_v1b.yaml`: the flat GRU (width 156) forecasts every taxel's FSR change
+  100 ms ahead from its global state at the last 20 steps, through a node head (the same pretext and data as F-43);
+* fine-tuning `v1_e14e_ssl_flat.yaml` vs the flat GRU from scratch, 170 / 420 episodes, 3 seeds.
+
+*Result:* pretext test NMSE 0.412 (structured model: 0.726). Test acc, mean ± std over seeds:
+
+| start | 170 episodes | 420 |
+|---|---|---|
+| flat GRU from scratch | 0.525 ± 0.015 | 0.594 ± 0.006 |
+| flat GRU, SSL 100 ms | 0.529 ± 0.010 | 0.582 ± 0.012 |
+| (F-43) somato_pool, scratch → SSL | 0.600 → **0.665** | 0.689 → **0.724** |
+
+*Evidence:*
+* No gain for the flat GRU at either size, while the structured model gains +6.5 / +3.5 points from the same pretext
+  and data.
+* The flat GRU predicts the pretext much better (NMSE 0.41 vs 0.73). Its global state sees the joints and IMU, so it
+  can forecast contact changes from the gait, a cross-modal shortcut. The structured model's per-taxel head sees only
+  touch (modalities segregated until stage 3) and must model local contact dynamics in the shared receptor. Those
+  features transfer to terrain; the gait-driven global ones do not.
+
+*Caveats:*
+* The transformer has no SSL counterpart yet: it is not causal in time, so it needs a time-causal mask or a
+  masked-token pretext.
+* One pretraining run per model.
+* The flat GRU's pretext differs in what it can see; this is the natural form for its architecture.
+
+*Implication:*
+* H-10 supported for the structured model and against the flat baseline. The receptor architecture (shared,
+  per-taxel, touch-only) turns a label-free forecasting task into terrain-relevant features; an unstructured model
+  takes the easiest predictive shortcut.
+* Extends the data-efficiency result: with SSL the structured model's lead over the flat GRU at 170 episodes grows from
+  7.5 to 13.6 points.
+
 **F-44. E-14c/d, the SSL gain is genuine (not input statistics), largest at 170 labelled episodes, and the horizon can
 go to 200 ms.** *Why:* check F-43's caveat, try a longer horizon, and fill the curve. *Setup:*
 * `configs/experiments/v1_e14c_ssl_checks.yaml`, 170 episodes, 3 seeds:
