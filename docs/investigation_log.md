@@ -11,9 +11,8 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 18:15)
 
-* **Running in jobq** (~5 h from 08:32): `e14c_pretrain_h10` (SSL, 200 ms horizon) → `e14c_checks` (200 ms
-  fine-tuning; statistics control for E-14b) → `e14d_ssl_h5_ends` (100 ms SSL at 2.5 % and 100 %). Update F-43 and
-  write F-44. E-14 (F-42) and E-14b (F-43: +6.5 points at 170 episodes) done.
+* **Running in jobq** (~2 h from 17:10): `e14e_pretrain_flat` → `e14e_ssl_flat` (SSL for the flat GRU). Write F-45.
+  SSL for the structured model: F-42–F-44 (+6.5 points at 170 episodes with a 100 ms horizon, control passed).
 * **Done:** v5 3-seed reference (F-41): somato_pool 0.615 / 0.773, receptor_only 0.592 / 0.749, transformer
   0.537 / 0.720, flat_gru 0.525 / 0.703 at 10 % / 100 %.
 * **Awaiting the user:**
@@ -68,8 +67,7 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 1 | E-14c/d | SSL checks and full curve (F-43 follow-up, H-10) | (c) 200 ms horizon; the 100 ms SSL weights with input statistics refitted on the labelled subset (control), at 170 episodes, 3 seeds. (d) 100 ms SSL at 42 and 1,680 episodes (all weights and stage 1 frozen), 3 seeds | `configs/experiments/v1_e14c_ssl_checks.yaml`; `v1_e14b_ssl_h5.yaml --set fractions=[0.025,1.0]` | ~5 h | **running** (jobq `e14c_pretrain_h10`, `e14c_checks`, `e14d_ssl_h5_ends`) |
-| 2 | E-14e | SSL for the baselines (H-10: "more for the structured model") | A comparable pretext for the flat GRU and transformer (forecast every taxel's 100 ms change from the global state), then the same fine-tuning | to write | ~4 h | queued |
+| 1 | E-14e | SSL for the baselines (H-10: "more for the structured model") | Flat GRU: the same 100 ms forecasting pretext from its global state (node head; outputs at the last 20 steps, 15 with targets), then fine-tuning vs flat from scratch at 170 / 420 episodes, 3 seeds. Note: the flat state sees joints and gait (cross-modal), the structured per-taxel head only touch, so the flat pretext is easier (NMSE 0.58 at step 1,000 vs 0.73 final). Transformer: needs a time-causal mask or a masked-token pretext (not yet) | `configs/experiments/ssl_pretrain_flat_v1b.yaml`, `v1_e14e_ssl_flat.yaml` | ~2 h | **running** (jobq `e14e_pretrain_flat`, `e14e_ssl_flat`) |
 | 9 | E-15 | Stage-wise vs end-to-end (H-10) | Stages trained on their own objectives and frozen, only stage 3 task-specific | to write | ~4 h | blocked (T-11) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
@@ -77,6 +75,7 @@ very long runs until earlier steps are sound.
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-14c/d, SSL checks and curve (F-44).
 * E-14b, SSL with a 100 ms horizon (F-43).
 * E-14, SSL next-step pretraining (F-42).
 * E-25, random frozen stage 1 (F-40).

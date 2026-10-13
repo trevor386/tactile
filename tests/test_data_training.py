@@ -177,6 +177,21 @@ def test_ssl_next_step_pretraining_and_finetune(tmp_path, dataset_dir, store):
     assert shared and all(torch.equal(a[k], b[k]) for k in shared)
 
 
+def test_ssl_next_step_flat_baseline(tmp_path, dataset_dir, store):
+    """The flat GRU's SSL counterpart: a node head forecasts every sensor from the global state at the last k steps."""
+    kw = dict(dataset=str(dataset_dir), output_dir=str(tmp_path), sensors=IDEAL, window=10, stride=5,
+              eval_stride=10, split=(1 / 3, 1 / 3, 1 / 3))
+    flat = {"architecture": "flat_recurrent", "hidden": 16, "heads": {"ssl": {"type": "node", "out_dim": 5}}}
+    pre = run_experiment(ExperimentConfig(name="fssl", model=flat, tasks={"ssl": {"type": "next_step", "horizon": 2}},
+                                          train=TrainConfig(epochs=1, batch_size=4, output_steps=6,
+                                                            select_metric="-ssl/nmse"), **kw), store, verbose=False)
+    assert math.isfinite(pre["test/ssl/nmse"]) and pre["test/ssl/nmse"] >= 0.0  # one epoch on mock data: untrained
+    tune = TrainConfig(epochs=1, batch_size=4, output_steps=2, init_checkpoint=str(tmp_path / "fssl" / "model.pt"))
+    res = run_experiment(ExperimentConfig(name="fft", model={"architecture": "flat_recurrent", "hidden": 16},
+                                          train=tune, save_checkpoint=False, **kw), store, verbose=False)
+    assert 0.0 <= res["test/terrain/acc_last"] <= 1.0
+
+
 def test_trainer_freeze(store):
     """``freeze`` keeps the named modules fixed while the rest trains."""
     from somato.models.builder import build_model, parse_model_config

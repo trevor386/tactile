@@ -13,6 +13,46 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-44. E-14c/d, the SSL gain is genuine (not input statistics), largest at 170 labelled episodes, and the horizon can
+go to 200 ms.** *Why:* check F-43's caveat, try a longer horizon, and fill the curve. *Setup:*
+* `configs/experiments/v1_e14c_ssl_checks.yaml`, 170 episodes, 3 seeds:
+  * the 100 ms SSL weights with input statistics refitted on the labelled subset;
+  * SSL with a 200 ms horizon (`horizon: 10`, all 5 brain steps as outputs);
+* `v1_e14b_ssl_h5.yaml --set fractions=[0.025,1.0]`: the 100 ms SSL model at 42 and 1,680 episodes.
+
+*Result (test acc, mean ± std over seeds; scratch from E-14 and F-41):*
+
+| start | 42 episodes | 170 | 420 | 1,680 |
+|---|---|---|---|---|
+| from scratch | 0.491 ± 0.015 | 0.600 ± 0.018 | 0.689 ± 0.016 | 0.773 ± 0.005 |
+| SSL 100 ms | 0.506 ± 0.018 | 0.665 ± 0.007 | 0.724 ± 0.016 | **0.788 ± 0.004** |
+| SSL 100 ms, statistics refitted | — | 0.666 ± 0.002 | — | — |
+| SSL 200 ms | — | **0.673 ± 0.006** | — | — |
+| SSL 100 ms, stage 1 frozen | 0.488 ± 0.011 | 0.606 ± 0.015 | 0.665 ± 0.004 | 0.724 ± 0.006 |
+
+Pretext test NMSE: 20 ms 0.816, 100 ms 0.726, 200 ms 0.661.
+
+*Evidence:*
+* With statistics refitted on the labelled subset, as in scratch training, the gain is unchanged (0.666 vs 0.665). It
+  comes from the pretrained weights.
+* The gain is largest at 170 episodes (+6.5 points), still clear at 420 (+3.5) and at full data (+1.5, 3 seed stds),
+  and within noise at 42 (+1.5). With ~8 labelled episodes per class the head cannot be fitted well whatever the
+  features.
+* Longer horizons are more predictable and slightly better: 200 ms 0.673 vs 100 ms 0.665, within ~1 std.
+* Frozen SSL receptors trail full fine-tuning more as the labels grow (−6 at 420, −6.4 at 1,680). Labels still refine
+  the receptors.
+
+*Caveats:*
+* One pretraining run per horizon.
+* The unlabelled pool is the 1,680 training episodes.
+* The baselines have no SSL yet (E-14e).
+
+*Implication:*
+* SSL on contact dynamics improves the structured model at every data size above a few episodes per class. That
+  supports H-10 for the structured model; whether it helps it *more* than the baselines needs E-14e.
+* Default SSL horizon: 100–200 ms.
+* A larger unlabelled pool is the obvious next lever: unlabelled touch data is cheap to log on a robot.
+
 **F-43. E-14b, SSL forecasting 100 ms ahead gives a real data-efficiency gain: +6.5 points at 170 labelled episodes,
 +3.5 at 420 (20 ms: +2.2 / +1.6).** *Why:* F-42's 20 ms target was mostly noise. *Setup:*
 * as E-14 but `next_step` with `horizon: 5` (the FSR change 100 ms ahead): `ssl_pretrain_v1b.yaml --set
@@ -39,7 +79,7 @@ seeds:
 
 *Caveats:*
 * The SSL runs keep input statistics fitted on the 1,680 unlabelled episodes, while scratch fits them on the labelled
-  subset. Control running (E-14c: SSL weights with refitted statistics).
+  subset. **Control (F-44): with refitted statistics the gain is unchanged.**
 * One pretraining run.
 * The unlabelled pool is the training split itself.
 * The baselines have no SSL counterpart yet, so "SSL helps the structured model more" (H-10) is untested.

@@ -1,0 +1,37 @@
+# E-14e: the flat GRU's counterpart of ssl_pretrain_v1b.yaml (H-10: does SSL help the structured model more?). Same
+# pretext (forecast every taxel's FSR change 100 ms ahead, no labels, the 1,680 training episodes), from the flat
+# GRU's global state at each of the last 20 latent steps (15 of them have a target inside the window) through a node
+# head (hidden -> all sensors x 10 samples). Width 156 as in the main comparison (~430k parameters plus the head).
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_flat_v1b.yaml
+name: ssl_flat_gru_h5
+dataset: datasets/mjlab_v1_2400
+output_dir: runs/v1/ssl
+sensors: configs/sensors/fsr_v1_random.yaml
+model:
+  architecture: flat_recurrent
+  hidden: 156
+  chunk_features: stats
+  kinematics: true
+  heads:
+    ssl: {type: node, out_dim: 10}
+tasks:
+  ssl: {type: next_step, group: tactile, horizon: 5}
+window: 25
+stride: 10
+eval_stride: 25
+split: [0.7, 0.15, 0.15]
+train:
+  epochs: 15
+  min_steps: 6000
+  eval_every: 250
+  patience: 0
+  batch_size: 32
+  lr: 0.0003
+  amp: bf16
+  num_workers: 4
+  output_steps: 20
+  select_metric: -ssl/nmse
+augment:
+  random_yaw: true
+  random_translation: 1.0
+  sensor_dropout: 0.05

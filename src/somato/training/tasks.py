@@ -99,8 +99,10 @@ class NextStepPrediction(Task):
         self.group, self.delta, self.horizon = group, delta, horizon  # horizon: forecast the step this far ahead
 
     def _pairs(self, outputs, batch):
-        steps = outputs["steps"][0].long()
         x = batch.readings[self.group]  # [B, L, S, Ng, C]
+        k = outputs[self.head].shape[1]
+        steps = (outputs["steps"][0].long() if "steps" in outputs  # brain steps (hierarchical models)
+                 else torch.arange(x.shape[1] - k, x.shape[1], device=x.device))  # the last k steps (flat GRU)
         keep = steps + self.horizon < x.shape[1]
         sl = batch.info.slices[self.group]
         pred = outputs[self.head][:, keep][:, :, sl].float()  # [B, k, Ng, S*C]

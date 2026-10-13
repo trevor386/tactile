@@ -87,10 +87,15 @@ class FlatRecurrentModel(nn.Module):
         self.encoder = mlp(in_dim, cfg.hidden, cfg.hidden, layers=cfg.mlp_layers, dropout=cfg.dropout)
         self.rnn = nn.GRU(cfg.hidden, cfg.hidden, num_layers=cfg.rnn_layers, batch_first=True)
         for name, h in cfg.heads.items():
-            if h.type != "global":
-                raise ValueError(f"FlatRecurrentModel only supports global heads (head '{name}' is '{h.type}')")
-        self.heads = nn.ModuleDict({n: mlp(cfg.hidden, cfg.hidden, h.out_dim, 2, dropout=cfg.dropout)
-                                    for n, h in cfg.heads.items()})
+            if h.type not in ("global", "node"):
+                raise ValueError(f"FlatRecurrentModel supports global and node heads (head '{name}' is '{h.type}')")
+        # A "node" head (SSL pretext, E-14e) predicts out_dim values for every sensor from the global state.
+        self.num_nodes = info.num_nodes
+        self.node_heads = {n for n, h in cfg.heads.items() if h.type == "node"}
+        self.heads = nn.ModuleDict({
+            n: mlp(cfg.hidden, cfg.hidden, h.out_dim * (self.num_nodes if n in self.node_heads else 1), 2,
+                   dropout=cfg.dropout)
+            for n, h in cfg.heads.items()})
 
     @torch.no_grad()
     def fit_normalizers(self, readings: dict[str, torch.Tensor]) -> None:
@@ -123,6 +128,8 @@ class FlatRecurrentModel(nn.Module):
         k = L if output_steps is None else min(output_steps, L)
         out = out[:, L - k :]
         outputs = {n: head(out) for n, head in self.heads.items()}
+        for n in self.node_heads:
+            outputs[n] = outputs[n].view(*out.shape[:2], self.num_nodes, -1)  # [B, k, N, out]
         if return_features:
             outputs["features"] = out
         return outputs, {"h": h}

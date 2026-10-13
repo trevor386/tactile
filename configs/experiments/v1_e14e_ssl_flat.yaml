@@ -1,0 +1,20 @@
+# E-14e (H-10): SSL for the flat GRU (configs/experiments/ssl_pretrain_flat_v1b.yaml, the same 100 ms forecasting
+# pretext) vs the flat GRU from scratch, at 170 / 420 labelled episodes, 3 seeds, terrain_v1b. Compare the gain with
+# the structured model's (F-43: +6.5 / +3.5 points). The transformer needs a causal or masked-token variant (not yet).
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_flat_v1b.yaml
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14e_ssl_flat.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14e_ssl_flat
+fractions: [0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  flat_scratch:
+    model: {architecture: flat_recurrent, hidden: 156, chunk_features: stats, kinematics: true,
+            heads: {terrain: {type: global}}}
+    train: {lr: 0.0003}
+  flat_ssl_h5:
+    model: {architecture: flat_recurrent, hidden: 156, chunk_features: stats, kinematics: true,
+            heads: {terrain: {type: global}}}
+    train: {lr: 0.0003, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_flat_gru_h5/model.pt}
