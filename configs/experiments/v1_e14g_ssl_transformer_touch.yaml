@@ -1,0 +1,20 @@
+# E-14g (F-45/F-46 caveat): does SSL help the transformer once the robot-motion shortcut is removed? Pretrain the
+# transformer's 100 ms forecasting pretext on touch only (no joints, no IMU), then fine-tune the full transformer
+# (all modalities) from it, at 170 / 420 labelled episodes, 3 seeds; compare with E-14f's transformer_scratch.
+# Transferred: the tactile patch embedding, kinematic encoding, transformer layers and class token; the group
+# embedding (1 vs 3 groups) and the joint/IMU patch embeddings start fresh. Positions in pretraining are relative to
+# a link-0 taxel (no IMU), in fine-tuning to the IMU (both on link 0).
+#   python scripts/train.py --config configs/experiments/ssl_pretrain_transformer_v1b.yaml \
+#       --set "input_groups=[tactile]" name=ssl_transformer_touch_h5
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14g_ssl_transformer_touch.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14g_ssl_transformer_touch
+fractions: [0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  transformer_ssl_touch_h5:
+    model: {architecture: transformer, dim: 108, layers: 4, attn_heads: 4, patch_steps: 5, pos_bands: 4,
+            heads: {terrain: {type: global, hidden: 128}}}
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_transformer_touch_h5/model.pt}

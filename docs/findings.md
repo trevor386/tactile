@@ -13,6 +13,36 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-47. E-15, stage-wise training (stages 1–2 trained only by SSL, then frozen; 7 % of the weights learn terrain)
+matches scratch training at 170 episodes but falls well behind end-to-end fine-tuning from the same weights.** *Why:*
+H-10's stage-wise half (the user's "layer-wise training" idea). *Setup:* `configs/experiments/v1_e15_stagewise.yaml`:
+the 100 ms SSL weights (F-43) with stages 1 and 2 frozen (`freeze: [temporal, spatial]`); only the projection, group
+embedding and stage-3 head train (29.8k of 428k parameters); 170 / 420 episodes, 3 seeds, `terrain_v1b`.
+
+*Result (test acc, mean ± std over seeds):*
+
+| training | 170 episodes | 420 |
+|---|---|---|
+| stages 1–2 SSL-only, frozen | 0.602 ± 0.009 | 0.631 ± 0.011 |
+| stage 1 SSL-only, frozen (F-43) | 0.606 ± 0.015 | 0.665 ± 0.004 |
+| SSL init, all fine-tuned (F-43) | **0.665 ± 0.007** | **0.724 ± 0.016** |
+| from scratch, end-to-end | 0.600 ± 0.018 | 0.689 ± 0.016 |
+| (F-40) stage 1 random, frozen | 0.536 | — |
+
+*Evidence:*
+* Frozen self-supervised stages 1–2 plus a small trainable head reach the scratch model at 170 episodes. Label-free
+  stages already carry the terrain-relevant features.
+* With more labels the frozen variants fall behind (−5.8 vs scratch at 420), and end-to-end fine-tuning from the SSL
+  weights is best everywhere (+6.3 / +9.3 over frozen stages 1–2).
+* Freezing stage 2 as well costs nothing at 170 episodes and 3.4 points at 420.
+
+*Caveats:* one SSL objective; stages trained jointly by SSL (not one at a time); 3 seeds.
+*Implication:*
+* H-10, stage-wise half: stage-wise (frozen) training is viable and label-cheap but not better than end-to-end. The
+  recipe is SSL pretraining followed by end-to-end fine-tuning.
+* A deployment that must keep stages fixed (e.g. receptor firmware) could use frozen SSL stages at a cost of 0–6
+  points.
+
 **F-46. E-14f, the same SSL hurts the transformer (−1.7 / −3.7 points): across all three architectures, label-free
 contact forecasting helps only the structured one.** *Why:* complete H-10's comparison (F-45 covered the flat GRU).
 *Setup:*
