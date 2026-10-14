@@ -13,6 +13,44 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-46. E-14f, the same SSL hurts the transformer (−1.7 / −3.7 points): across all three architectures, label-free
+contact forecasting helps only the structured one.** *Why:* complete H-10's comparison (F-45 covered the flat GRU).
+*Setup:*
+* `configs/experiments/ssl_pretrain_transformer_v1b.yaml`: the transformer (width 108) with time-causal per-token
+  outputs (new option `causal`: each 100 ms patch encoded together with earlier patches only);
+* each (patch, sensor) token forecasts its sensor's FSR change 100 ms past the end of its patch;
+* same data and pretext as F-43;
+* fine-tuning `v1_e14f_ssl_transformer.yaml`: the standard transformer from these weights vs from scratch, 170 / 420
+  episodes, 3 seeds.
+
+*Result:* pretext test NMSE 0.311 (flat GRU 0.412, structured 0.726). Test acc, mean ± std over seeds:
+
+| model | scratch → SSL, 170 episodes | scratch → SSL, 420 episodes |
+|---|---|---|
+| somato_pool (F-43) | 0.600 → **0.665 (+6.5)** | 0.689 → **0.724 (+3.5)** |
+| flat GRU (F-45) | 0.525 → 0.529 (+0.4) | 0.594 → 0.582 (−1.2) |
+| transformer | 0.530 → 0.513 (−1.7) | 0.630 → 0.593 (−3.7) |
+
+*Evidence:*
+* The ordering on the pretext is the reverse of the downstream benefit. The models that see every modality (transformer,
+  flat GRU) predict the skin's future best, through the robot's own motion (joints, IMU). That leaves terrain-
+  irrelevant features, and for the transformer a worse initialization.
+* The structured model sees only touch at the per-taxel head (modalities segregated until stage 3). It has to model
+  local contact dynamics in the shared receptor, which is exactly what terrain recognition uses (F-40, F-44).
+
+*Caveats:*
+* The transformer is pretrained with causal (prefix) attention and fine-tuned with full attention, a context mismatch
+  that may cost it something.
+* One pretext and one pretraining run per model.
+* A touch-only pretext for the baselines (inputs restricted to touch) would remove the gait shortcut; untested.
+
+*Implication:*
+* H-10's second half is supported: SSL improves the structured model (+6.5 points at 170 episodes) and not the
+  unstructured ones. With SSL the structured lead at 170 episodes is 13.6 points over the flat GRU and 15.2 over the
+  transformer (the v5 reference lead without SSL: 7.8).
+* The architecture's modality segregation and shared per-sensor receptor make a simple self-supervised objective
+  useful. Structure turns cheap unlabelled touch data into better terrain perception.
+
 **F-45. E-14e, the same SSL does nothing for the flat GRU (+0.4 / −1.2 points), although it solves the pretext far
 better: SSL helps the structured model specifically.** *Why:* H-10's second half (SSL helps the structured model
 *more*). *Setup:*

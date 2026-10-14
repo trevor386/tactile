@@ -1,0 +1,16 @@
+# E-15 (H-10, stage-wise training): stages 1 and 2 trained only on their self-supervised objective (the 100 ms SSL of
+# F-43) and then frozen; only the projection and the stage-3 head learn the terrain task. Compare with end-to-end
+# fine-tuning from the same SSL weights (F-43: 0.665 / 0.724) and with stage 1 frozen alone (0.606 / 0.665), at
+# 170 / 420 labelled episodes, 3 seeds, terrain_v1b.
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e15_stagewise.yaml
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e15_stagewise
+fractions: [0.1, 0.25]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: false
+models:
+  somato_ssl_h5_frozen12:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, freeze: [temporal, spatial],
+            init_checkpoint: runs/v1/ssl/ssl_somato_pool_h5/model.pt}
