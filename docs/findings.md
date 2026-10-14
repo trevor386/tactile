@@ -13,6 +13,40 @@ archived setup; read their caveats before citing them (`docs/archive/README.md`)
 
 ## Version 1 (2026-10-08)
 
+**F-48. E-14g, pretraining the transformer on touch only (no joints, no IMU) still gives no gain: the skin's global
+pattern reveals the gait as well. Locality, not just modality segregation, makes the structured SSL useful.** *Why:*
+F-45/F-46's caveat: were the baselines just exploiting joint/IMU signals? *Setup:* the transformer's 100 ms
+forecasting pretext with `input_groups: [tactile]` (`ssl_pretrain_transformer_v1b.yaml --set
+"input_groups=[tactile]"`), then the full transformer fine-tuned from it (`v1_e14g_ssl_transformer_touch.yaml`), 170 /
+420 episodes, 3 seeds.
+
+*Result:* pretext test NMSE 0.374 (all modalities 0.311; structured per-taxel head 0.726). Test acc:
+
+| transformer | 170 episodes | 420 |
+|---|---|---|
+| from scratch (E-14f) | 0.530 ± 0.018 | 0.630 ± 0.015 |
+| SSL, all modalities (E-14f) | 0.513 ± 0.026 | 0.593 ± 0.014 |
+| SSL, touch only | 0.531 ± 0.009 | 0.597 ± 0.011 |
+
+*Evidence:*
+* Without joints and IMU the transformer still forecasts the skin far better than the structured model (NMSE 0.37 vs
+  0.73). The gait shows up as pressure waves travelling along the whole skin, which global attention can read.
+* The fine-tuning outcome is unchanged: no gain at 170 episodes, −3.3 points at 420.
+* The structured model's forecast at a taxel sees only its 45 mm neighbourhood (the stage-2 kernel) and its own
+  history (stage 1). It cannot use the global gait pattern, so it must model local contact dynamics: the features
+  terrain needs.
+
+*Caveats:*
+* The group embedding and the position reference (a link-0 taxel vs the IMU) differ between pretraining and
+  fine-tuning; fine-tuning re-learns them.
+* A global model trained on a local pretext (e.g. masked tokens with local context only) is untested.
+
+*Implication:*
+* F-46 refined: the SSL benefit comes from the structured model's *locality* (local receptive fields, shared
+  per-taxel receptor) as well as modality segregation. With global context, a forecasting pretext is solved through
+  the robot's own motion, which does not help terrain recognition.
+* Further support for H-10 (SSL helps the structured model more), now robust to the shortcut objection.
+
 **F-47. E-15, stage-wise training (stages 1–2 trained only by SSL, then frozen; 7 % of the weights learn terrain)
 matches scratch training at 170 episodes but falls well behind end-to-end fine-tuning from the same weights.** *Why:*
 H-10's stage-wise half (the user's "layer-wise training" idea). *Setup:* `configs/experiments/v1_e15_stagewise.yaml`:

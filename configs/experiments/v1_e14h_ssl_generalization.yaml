@@ -1,0 +1,19 @@
+# E-14h (H-10, generalization half): does SSL pretraining also make the structured model more robust? Full-data
+# somato_pool from scratch vs fine-tuned from the 100 ms SSL weights (F-43/F-44: 0.773 vs 0.788 nominal), 3 seeds,
+# terrain_v1b, checkpoints saved; then the same evaluations as E-6/E-21 (sensor perturbations) and E-10 (dead links,
+# 2x taxel density, 12-link robot):
+#   python scripts/data_efficiency.py --config configs/experiments/v1_e14h_ssl_generalization.yaml
+#   python scripts/analysis/robustness.py --runs "runs/v1/e14h_ssl_generalization/*/frac1.0_seed*/model.pt" \
+#       --dataset datasets/mjlab_v1_2400 --suite configs/sensors/robustness_fsr_v1.yaml --out runs/v1/e14h_robustness.csv
+#   (and --suite configs/sensors/robustness_layout_v1.yaml on mjlab_v1_control_400 / dense_400 / links12_400, --episodes all)
+base: configs/experiments/terrain_v1b.yaml
+output_dir: runs/v1/e14h_ssl_generalization
+fractions: [1.0]
+seeds: [0, 1, 2]
+match_params: false
+save_checkpoints: true
+models:
+  somato_scratch: {model: configs/models/somato_v1_pool.yaml, train: {lr: 0.001}}
+  somato_ssl_h5:
+    model: configs/models/somato_v1_pool.yaml
+    train: {lr: 0.001, fit_normalizers: false, init_checkpoint: runs/v1/ssl/ssl_somato_pool_h5/model.pt}

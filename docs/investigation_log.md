@@ -11,8 +11,8 @@ IDs are stable: H = hypothesis, E = experiment, T = task (code or setup). Status
 
 ## RESUME HERE (state as of 2026-10-12 18:15)
 
-* **Running in jobq:** `e14g_pretrain_tf_touch` → `e14g_ssl_tf_touch` (E-14g, ~3 h from 23:31). Write F-48.
-  E-15 done (F-47: stage-wise is viable but end-to-end from SSL is best).
+* **Running in jobq** (~4 h from 01:30): `e14h_train` (full-data scratch vs SSL, checkpoints) → `e14h_robustness`
+  → `e14h_layout_{control,dense,links12}`. Write F-49 (does SSL help generalization?). E-14g done (F-48).
 * **SSL result (F-42–F-46):** the 100 ms forecasting pretext helps only the structured model (+6.5 points at 170
   episodes); flat GRU ±0, transformer −1.7 / −3.7.
 * **Done:** v5 3-seed reference (F-41): somato_pool 0.615 / 0.773, receptor_only 0.592 / 0.749, transformer
@@ -55,7 +55,7 @@ data. The structure is a starting point, changed only on evidence.
 | H-7 | Keeping modalities segregated until stage 3 is at least as good and generalizes better. | no difference in-distribution (F-18); generalization open |
 | H-8 | A dynamic, geometry-aware, recurrent stage 3 beats static pooling. | contradicted for the v1 brain implementation (F-17, F-19, F-20); research task T-19 |
 | H-9 | Stage 2 on stage-1 latents detects stimuli moving across the skin. | **supported** (F-27, 3 seeds: 0.96–0.97 with stage 2, 0.35–0.40 without; F-30, fair baselines with full poses and tuned lr: flat GRU 0.57, transformer at chance, both fit the training set) |
-| H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | **SSL part supported** (F-42–F-46): forecasting each taxel's FSR change 100 ms ahead (no labels) gives the structured model +6.5 / +3.5 / +1.5 points at 170 / 420 / 1,680 episodes (control passed); the same pretext gives the flat GRU nothing and the transformer −1.7 / −3.7 (both solve it through the robot's own motion). Stage-wise training (F-47): SSL-only stages 1–2 frozen + small head match scratch at 170 episodes but trail end-to-end fine-tuning (−6 / −9); freezing trained stages during transfer gave no benefit either (F-38). Recipe: SSL then end-to-end. |
+| H-10 | Self-supervised objectives and stage-wise training improve data efficiency and generalization, more for the structured model. | **SSL part supported** (F-42–F-46): forecasting each taxel's FSR change 100 ms ahead (no labels) gives the structured model +6.5 / +3.5 / +1.5 points at 170 / 420 / 1,680 episodes (control passed); the same pretext gives the flat GRU nothing and the transformer −1.7 / −3.7 (both solve it through the robot's own motion; touch-only pretraining does not change that for the transformer, which reads the gait from the whole skin, F-48). Generalization: E-14h. Stage-wise training (F-47): SSL-only stages 1–2 frozen + small head match scratch at 170 episodes but trail end-to-end fine-tuning (−6 / −9); freezing trained stages during transfer gave no benefit either (F-38). Recipe: SSL then end-to-end. |
 | H-11 | Physical property estimation is a better generalization target than Earth class labels, and structure helps it. | first half supported (F-25: estimates beat class lookup and transfer sensibly to unseen terrain). Structure: best in distribution (clearly for sinkage), small margin for friction, no help out of distribution (F-25; F-29 and F-36: friction and sinkage errors double beyond the trained range for every model). |
 | H-12 | Protocol v4's budget, max(3,000 steps, 15 epochs), trains every model adequately. | **contradicted at intermediate data** (F-28: 2× budget gains 2–5 points at 25 % for all but flat, ≤ 2 at full data; ranking unchanged). Protocol v5 (2× floor, same epochs) adopted for new studies. |
 | H-13 | The tactile information is also useful on granular, shifting and uneven terrain. | open (E-7, E-16) |
@@ -69,13 +69,14 @@ very long runs until earlier steps are sound.
 | # | ID | experiment | design | config | cost | status |
 |---|---|---|---|---|---|---|
 | 5 | E-8 | Sim-to-sim (H-2c) | Train mjlab, test Isaac (and the reverse), paired episodes | to write | ~3 h | blocked (T-10) |
-| 1 | E-14g | Transformer SSL without the motion shortcut (F-45/F-46 caveat) | The transformer's 100 ms forecasting pretext on touch only (`input_groups: [tactile]`), then the full transformer fine-tuned from it at 170 / 420 episodes, 3 seeds, vs E-14f's scratch | `configs/experiments/v1_e14g_ssl_transformer_touch.yaml` (+ `--set "input_groups=[tactile]"` on the transformer pretraining config) | ~3 h | **running** (jobq `e14g_pretrain_tf_touch` from 23:31, `e14g_ssl_tf_touch`) |
+| 1 | E-14h | Does SSL help generalization? (H-10 second clause) | Full-data somato_pool from scratch vs fine-tuned from the 100 ms SSL weights, 3 seeds, checkpoints saved; then the E-6/E-21 sensor-perturbation suite and E-10's layout tests (dead links; 2× density and 12-link robot zero-shot, with the paired control) | `configs/experiments/v1_e14h_ssl_generalization.yaml` | ~4 h | **running** (jobq `e14h_*` from 01:30) |
 | 10 | E-11 | Larger data (H-4) | A 9,600-episode dataset; curves to 4× the current maximum | to write | ~10 h | queued |
 | 11 | E-16 | Uneven / granular proxies (H-13) | Heightfield terrain, sand-like compliance | to write | — | blocked (T-13) |
 | 12 | E-18 | Long-horizon streaming | Part (a) done (F-35: streaming works to 3 s without retraining). Remaining: longer episodes with terrain switches mid-episode; whether TBPTT training (T-17) removes the structured models' small late dip | — | ~2 h | queued (TBPTT part blocked by T-17) |
 | 13 | E-17 | Bio-inspired variants | Architectures from the somatosensory literature review | — | — | blocked (T-15) |
 
 **Done:**
+* E-14g, transformer SSL on touch only (F-48).
 * E-15, stage-wise training (F-47).
 * E-14f, SSL for the transformer (F-46).
 * E-14e, SSL for the flat GRU (F-45).
